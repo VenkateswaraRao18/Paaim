@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: paaim-postgres
+    environment:
+      POSTGRES_USER: paaim
+      POSTGRES_PASSWORD: paaim_dev
+      POSTGRES_DB: paaim_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paaim"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: paaim-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: paaim-backend
+    environment:
+      DATABASE_URL: postgresql://paaim:paaim_dev@postgres:5432/paaim_db
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: development
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn paaim.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Ollama (optional, for local LLM experiments)
+  # ollama:
+  #   image: ollama/ollama
+  #   container_name: paaim-ollama
+  #   ports:
+  #     - "11434:11434"
+  #   environment:
+  #     OLLAMA_HOST: 0.0.0.0:11434
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   # Pull model on startup: ollama pull gemma:2b
+
+volumes:
+  postgres_data:
+  # ollama_data:
+
+networks:
+  default:
+    name: paaim-network

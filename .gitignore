@@ -1,0 +1,74 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+.venv
+
+# FastAPI/Uvicorn
+*.log
+*.pot
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Node (frontend)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.nuxt
+frontend/dist
+frontend/.cache/
+frontend/.vuepress/dist
+frontend/.serverless/
+frontend/.fusebox/
+frontend/.dynamodb/
+frontend/.tern-port
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Build
+dist/
+build/
+
+# Misc
+.DS_Store
+Thumbs.db

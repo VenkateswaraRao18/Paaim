@@ -1,8 +1,16 @@
 from typing import Dict, List, Any, Optional
 from abc import ABC
 from datetime import datetime
+import os
+import json
 
 from paaim.models import ActionRecommendation, RiskLevel
+
+try:
+    from anthropic import Anthropic
+    CLAUDE_AVAILABLE = True
+except ImportError:
+    CLAUDE_AVAILABLE = False
 
 
 class RedTeamReview:
@@ -42,13 +50,21 @@ class RedTeamAgent:
     """
     Red-Team Agent: challenges recommendations for safety and assumptions.
 
-    MVP version uses hardcoded challenge rules.
-    Phase 2 will add Claude API for more sophisticated challenges.
+    Phase 2: Uses Claude API for intelligent risk assessment.
+    Falls back to hardcoded rules if Claude API unavailable.
     """
 
-    def __init__(self):
-        """Initialize red-team agent."""
+    def __init__(self, use_claude: bool = True):
+        """Initialize red-team agent with optional Claude API support."""
         self.challenge_rules = self._load_challenge_rules()
+        self.use_claude = use_claude and CLAUDE_AVAILABLE
+
+        if self.use_claude:
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if api_key:
+                self.client = Anthropic(api_key=api_key)
+            else:
+                self.use_claude = False
 
     def _load_challenge_rules(self) -> Dict[str, Dict[str, Any]]:
         """Load hardcoded challenge rules."""
@@ -152,6 +168,9 @@ class RedTeamAgent:
         """
         Challenge a recommended action.
 
+        Uses Claude API if available for intelligent risk assessment,
+        falls back to hardcoded rules.
+
         Args:
             action_name: Name of action being challenged
             confidence: Agent confidence in recommendation (0.0-1.0)
@@ -162,6 +181,113 @@ class RedTeamAgent:
         Returns:
             RedTeamReview with challenges and assessment
         """
+        if self.use_claude:
+            try:
+                return self._challenge_with_claude(
+                    action_name, confidence, evidence_signals, event_context, risk_level
+                )
+            except Exception as e:
+                # Fall back to hardcoded rules if Claude call fails
+                print(f"Claude API failed: {e}, falling back to hardcoded rules")
+                return self._challenge_with_rules(
+                    action_name, confidence, evidence_signals, event_context, risk_level
+                )
+        else:
+            return self._challenge_with_rules(
+                action_name, confidence, evidence_signals, event_context, risk_level
+            )
+
+    def _challenge_with_claude(
+        self,
+        action_name: str,
+        confidence: float,
+        evidence_signals: List[str],
+        event_context: Dict[str, Any],
+        risk_level: RiskLevel,
+    ) -> RedTeamReview:
+        """Challenge using Claude API for intelligent risk assessment."""
+        prompt = self._build_challenge_prompt(
+            action_name, confidence, evidence_signals, event_context, risk_level
+        )
+
+        message = self.client.messages.create(
+            model="claude-opus-4-7",
+            max_tokens=1000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        response_text = message.content[0].text
+        return self._parse_claude_response(
+            action_name, confidence, response_text, risk_level
+        )
+
+    def _build_challenge_prompt(
+        self,
+        action_name: str,
+        confidence: float,
+        evidence_signals: List[str],
+        event_context: Dict[str, Any],
+        risk_level: RiskLevel,
+    ) -> str:
+        """Build prompt for Claude to challenge an action."""
+        return f"""You are a safety-first red-team engineer challenging a manufacturing decision.
+
+ACTION BEING CHALLENGED:
+- Action: {action_name}
+- Agent Confidence: {confidence:.0%}
+- Risk Level: {risk_level.value}
+
+SUPPORTING EVIDENCE:
+{json.dumps(evidence_signals, indent=2)}
+
+EVENT CONTEXT:
+{json.dumps(event_context, indent=2)}
+
+Your task: Provide a concise red-team assessment in JSON format with:
+1. "risk_factors": List of 2-3 specific concerns about this action
+2. "assumptions_challenged": List of assumptions that might be wrong
+3. "suggested_alternatives": List of 1-2 safer alternatives
+4. "confidence_adjustment": Number between -0.3 and 0.1 (confidence adjustment)
+5. "overall_risk_assessment": One of ["acceptable", "marginal", "elevated", "critical"]
+
+Focus on:
+- Hidden dependencies or side effects
+- Sensor reliability and false positives
+- Resource constraints
+- Safety first principle
+
+Respond with ONLY valid JSON, no other text."""
+
+    def _parse_claude_response(
+        self, action_name: str, confidence: float, response_text: str, risk_level: RiskLevel
+    ) -> RedTeamReview:
+        """Parse Claude's JSON response into RedTeamReview."""
+        try:
+            data = json.loads(response_text)
+        except json.JSONDecodeError:
+            # If parsing fails, fall back to hardcoded rules
+            return self._challenge_with_rules(
+                action_name, confidence, [], {}, risk_level
+            )
+
+        return RedTeamReview(
+            action_name=action_name,
+            risk_factors=data.get("risk_factors", []),
+            suggested_alternatives=data.get("suggested_alternatives", []),
+            assumptions_challenged=data.get("assumptions_challenged", []),
+            confidence_adjustment=float(data.get("confidence_adjustment", 0.0)),
+            overall_risk_assessment=data.get("overall_risk_assessment", "acceptable"),
+        )
+
+    def _challenge_with_rules(
+        self,
+        action_name: str,
+        confidence: float,
+        evidence_signals: List[str],
+        event_context: Dict[str, Any],
+        risk_level: RiskLevel = RiskLevel.MEDIUM,
+    ) -> RedTeamReview:
+        """Challenge using hardcoded rules (fallback)."""
         # Get challenge rules for this action
         rules = self.challenge_rules.get(action_name, {})
 

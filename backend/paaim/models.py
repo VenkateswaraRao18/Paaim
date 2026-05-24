@@ -211,6 +211,21 @@ class FactoryModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class ApprovalWorkflowModel(Base):
+    """Approval workflow for decisions."""
+    __tablename__ = "approval_workflows"
+
+    id = Column(String, primary_key=True)
+    decision_id = Column(String, ForeignKey("decisions.id"))
+    approver_role = Column(String, nullable=False)
+    status = Column(String, nullable=False)  # pending, approved, rejected
+    notes = Column(String)
+    approved_at = Column(DateTime)
+    escalation_trail = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+
 # Database setup
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

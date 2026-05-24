@@ -1,0 +1,254 @@
+{
+  "scenarios": [
+    {
+      "id": "scenario_001_safety_quality",
+      "name": "Safety-Quality Collision",
+      "description": "Worker zone intrusion detected simultaneously with quality defect spike. Tests policy prioritization of safety over quality.",
+      "difficulty": "easy",
+      "event_count": 2,
+      "duration_seconds": 1,
+      "events": [
+        {
+          "delay_ms": 0,
+          "event_type": "zone_intrusion",
+          "description": "Worker enters restricted robot zone"
+        },
+        {
+          "delay_ms": 500,
+          "event_type": "defect_detection",
+          "description": "Quality defect rate spikes to 8.5 per 100 units"
+        }
+      ],
+      "expected_decisions": [
+        {
+          "priority": 1,
+          "action": "stop_line",
+          "reasoning": "Safety always first - zone intrusion requires immediate e-stop"
+        },
+        {
+          "priority": 2,
+          "action": "contain_batch",
+          "reasoning": "Once safety handled, address quality containment"
+        }
+      ],
+      "learning_objectives": [
+        "Safety has highest priority in policy engine",
+        "Multiple events handled in correct sequence",
+        "Policy conflict resolution working"
+      ]
+    },
+    {
+      "id": "scenario_002_maintenance_production",
+      "name": "Maintenance vs Production Tradeoff",
+      "description": "Bearing vibration anomaly detected while production order falls behind schedule. Tests tradeoff between preventive maintenance and production targets.",
+      "difficulty": "medium",
+      "event_count": 2,
+      "duration_seconds": 2,
+      "events": [
+        {
+          "delay_ms": 0,
+          "event_type": "vibration_anomaly",
+          "description": "Pump motor bearing showing 7.5 mm/s vibration (normal <4.5)"
+        },
+        {
+          "delay_ms": 1000,
+          "event_type": "order_at_risk",
+          "description": "Production order at 72% complete, deadline in 16 hours"
+        }
+      ],
+      "expected_decisions": [
+        {
+          "priority": 1,
+          "action": "schedule_maintenance",
+          "reasoning": "Maintenance prioritized due to bearing degradation risk",
+          "alternative": "propose_recovery_plan"
+        },
+        {
+          "priority": 2,
+          "action": "propose_recovery_plan",
+          "reasoning": "Address production recovery while scheduling maintenance"
+        }
+      ],
+      "learning_objectives": [
+        "Quality and maintenance priorities balanced against production",
+        "Impact simulation shows maintenance cost vs production risk",
+        "Decision Twin estimates downtime vs failure prevention"
+      ]
+    },
+    {
+      "id": "scenario_003_multi_event_chaos",
+      "name": "Multi-Event Chaos",
+      "description": "Simultaneous events across all domains: safety, quality, maintenance, production, and energy. Tests full orchestration and complex conflict resolution.",
+      "difficulty": "hard",
+      "event_count": 5,
+      "duration_seconds": 3,
+      "events": [
+        {
+          "delay_ms": 0,
+          "event_type": "zone_intrusion",
+          "description": "CRITICAL: Worker zone breach"
+        },
+        {
+          "delay_ms": 500,
+          "event_type": "defect_detection",
+          "description": "Quality defect spike detected"
+        },
+        {
+          "delay_ms": 1000,
+          "event_type": "vibration_anomaly",
+          "description": "Maintenance: bearing degradation detected"
+        },
+        {
+          "delay_ms": 1500,
+          "event_type": "order_at_risk",
+          "description": "Production: order falling behind"
+        },
+        {
+          "delay_ms": 2000,
+          "event_type": "peak_pricing_window",
+          "description": "Energy: peak pricing begins (cost optimization opportunity)"
+        }
+      ],
+      "expected_decisions": [
+        {
+          "priority": 1,
+          "action": "stop_line",
+          "reasoning": "Safety zone intrusion overrides all other priorities"
+        },
+        {
+          "priority": 2,
+          "action": "contain_batch",
+          "reasoning": "Quality containment while production halted for safety"
+        },
+        {
+          "priority": 3,
+          "action": "schedule_maintenance",
+          "reasoning": "Use halt window for maintenance scheduling"
+        },
+        {
+          "priority": 4,
+          "action": "propose_recovery_plan",
+          "reasoning": "Plan production recovery after safety/maintenance resolved"
+        }
+      ],
+      "learning_objectives": [
+        "Full orchestration pipeline working with 5 simultaneous events",
+        "Policy engine correctly prioritizes across all domains",
+        "Red-team agent identifies hidden assumptions",
+        "Decision Twin compares complex tradeoffs",
+        "Audit trail complete for all decisions"
+      ]
+    },
+    {
+      "id": "scenario_004_estop_cascade",
+      "name": "E-Stop Emergency Response",
+      "description": "Emergency stop button activated, triggering cascading effects on production and equipment. Tests immediate safety response and cascade management.",
+      "difficulty": "easy",
+      "event_count": 3,
+      "duration_seconds": 2,
+      "events": [
+        {
+          "delay_ms": 0,
+          "event_type": "e_stop_signal",
+          "description": "CRITICAL: E-stop button activated manually"
+        },
+        {
+          "delay_ms": 500,
+          "event_type": "order_at_risk",
+          "description": "Impact: production order now at immediate risk"
+        },
+        {
+          "delay_ms": 1000,
+          "event_type": "temperature_trend",
+          "description": "Concern: equipment stress from sudden stop"
+        }
+      ],
+      "expected_decisions": [
+        {
+          "priority": 1,
+          "action": "acknowledge_estop",
+          "reasoning": "Immediate e-stop acknowledgment - NO APPROVAL NEEDED"
+        },
+        {
+          "priority": 2,
+          "action": "manage_cascade",
+          "reasoning": "Handle downstream effects on production and equipment"
+        }
+      ],
+      "learning_objectives": [
+        "E-stop bypasses normal approval workflow",
+        "Cascade effects identified and managed",
+        "Safety-critical actions execute immediately",
+        "Notifications sent to appropriate roles"
+      ]
+    },
+    {
+      "id": "scenario_005_maintenance_chain",
+      "name": "Maintenance Escalation Chain",
+      "description": "Multiple maintenance signals escalating together: vibration + temperature. Tests maintenance priority escalation and coordinated maintenance planning.",
+      "difficulty": "medium",
+      "event_count": 2,
+      "duration_seconds": 1,
+      "events": [
+        {
+          "delay_ms": 0,
+          "event_type": "vibration_anomaly",
+          "description": "Pump bearing vibration at 7.5 mm/s"
+        },
+        {
+          "delay_ms": 500,
+          "event_type": "temperature_trend",
+          "description": "Hydraulic unit temperature rising: 68.5°C"
+        }
+      ],
+      "expected_decisions": [
+        {
+          "priority": 1,
+          "action": "schedule_maintenance",
+          "reasoning": "Both signals confirm degradation pattern"
+        },
+        {
+          "priority": 2,
+          "action": "escalate_critical",
+          "reasoning": "Dual signals indicate urgent maintenance window needed"
+        }
+      ],
+      "learning_objectives": [
+        "Multiple signals strengthen maintenance case",
+        "Escalation logic works based on signal correlation",
+        "Decision Twin estimates failure risk and maintenance window",
+        "Maintenance team notified with coordinated action plan"
+      ]
+    }
+  ],
+  "difficulty_mapping": {
+    "easy": {
+      "description": "Single or two-event scenarios, clear decision path",
+      "scenarios": ["scenario_001_safety_quality", "scenario_004_estop_cascade"],
+      "time_to_resolve": "30-60 seconds"
+    },
+    "medium": {
+      "description": "Two-three events, some policy conflicts, tradeoff analysis needed",
+      "scenarios": [
+        "scenario_002_maintenance_production",
+        "scenario_005_maintenance_chain"
+      ],
+      "time_to_resolve": "60-120 seconds"
+    },
+    "hard": {
+      "description": "Five events across all domains, complex orchestration, full decision pipeline",
+      "scenarios": ["scenario_003_multi_event_chaos"],
+      "time_to_resolve": "120-180 seconds"
+    }
+  },
+  "demo_sequence": {
+    "order": [
+      "scenario_001_safety_quality",
+      "scenario_004_estop_cascade",
+      "scenario_002_maintenance_production",
+      "scenario_005_maintenance_chain",
+      "scenario_003_multi_event_chaos"
+    ],
+    "description": "Recommended order for demo: start easy, build to hard. Each scenario demonstrates new aspects of the system."
+  }
+}

@@ -1,0 +1,304 @@
+# PAAIM Industrial Constitution v0.1
+# Policy rules defining what AI can do, what requires approval, and how priorities are resolved
+# This is the core policy engine configuration for bounded-autonomy manufacturing operations
+
+version: "0.1"
+factory_id: "factory_001"
+last_updated: "2026-05-22"
+
+# Priority hierarchy for conflict resolution (higher number = higher priority)
+priority_levels:
+  safety: 100
+  compliance: 90
+  quality: 70
+  production: 50
+  cost: 10
+
+# Action definitions: what each action is, approval requirements, impact
+actions:
+  # SAFETY ACTIONS
+  stop_line:
+    action_name: "stop_line"
+    category: "safety"
+    description: "Stop production line immediately"
+    approval_required: "safety_officer"
+    approval_threshold: "CRITICAL"
+    allowed: true
+    forbidden_with: []
+    priority: 100
+    estimated_impact:
+      downtime_hours: 0.5
+      scrap_units: 0
+      oee_impact: -5.0
+      safety_improvement: "high"
+      cost_impact: -2000
+
+  acknowledge_estop:
+    action_name: "acknowledge_estop"
+    category: "safety"
+    description: "Acknowledge emergency stop signal"
+    approval_required: "auto"
+    approval_threshold: "IMMEDIATE"
+    allowed: true
+    forbidden_with: []
+    priority: 100
+    estimated_impact:
+      immediate_stop: true
+      safety_improvement: "critical"
+
+  # QUALITY ACTIONS
+  contain_batch:
+    action_name: "contain_batch"
+    category: "quality"
+    description: "Hold batch for inspection"
+    approval_required: "supervisor"
+    approval_threshold: "HIGH"
+    allowed: true
+    forbidden_with: ["release_batch"]
+    priority: 70
+    estimated_impact:
+      downtime_hours: 0.25
+      scrap_units: 0
+      quality_improvement: "high"
+      cost_impact: -500
+
+  release_batch:
+    action_name: "release_batch"
+    category: "quality"
+    description: "Release batch to customer"
+    approval_required: "supervisor"
+    approval_threshold: "MEDIUM"
+    allowed: true
+    forbidden_with: ["contain_batch"]
+    priority: 50
+    estimated_impact:
+      downtime_hours: 0
+      scrap_units: -50
+      quality_risk: "medium"
+
+  inspect_root_cause:
+    action_name: "inspect_root_cause"
+    category: "quality"
+    description: "Perform quality root cause analysis"
+    approval_required: "operator"
+    approval_threshold: "LOW"
+    allowed: true
+    forbidden_with: []
+    priority: 70
+
+  # MAINTENANCE ACTIONS
+  schedule_maintenance:
+    action_name: "schedule_maintenance"
+    category: "maintenance"
+    description: "Schedule predictive maintenance"
+    approval_required: "operator"
+    approval_threshold: "MEDIUM"
+    allowed: true
+    forbidden_with: []
+    priority: 70
+    estimated_impact:
+      downtime_hours: 2
+      maintenance_time_hours: 2
+      failure_prevention: "high"
+      cost_impact: -1500
+
+  escalate_critical:
+    action_name: "escalate_critical"
+    category: "maintenance"
+    description: "Escalate critical maintenance issue"
+    approval_required: "manager"
+    approval_threshold: "CRITICAL"
+    allowed: true
+    forbidden_with: []
+    priority: 90
+
+  # PRODUCTION ACTIONS
+  propose_recovery_plan:
+    action_name: "propose_recovery_plan"
+    category: "production"
+    description: "Propose recovery plan for at-risk order"
+    approval_required: "supervisor"
+    approval_threshold: "MEDIUM"
+    allowed: true
+    forbidden_with: []
+    priority: 50
+    estimated_impact:
+      recovery_hours: 8
+      overtime_cost: 500
+      order_fulfillment_risk: "low"
+
+  adjust_schedule:
+    action_name: "adjust_schedule"
+    category: "production"
+    description: "Adjust production schedule"
+    approval_required: "operator"
+    approval_threshold: "LOW"
+    allowed: true
+    forbidden_with: []
+    priority: 50
+
+  # ENERGY ACTIONS
+  shift_non_critical_load:
+    action_name: "shift_non_critical_load"
+    category: "energy"
+    description: "Shift non-critical production to off-peak"
+    approval_required: "operator"
+    approval_threshold: "LOW"
+    allowed: true
+    forbidden_with: []
+    priority: 10
+    estimated_impact:
+      downtime_hours: 0
+      cost_savings: 1500
+      delay_hours: 2
+
+  reduce_consumption:
+    action_name: "reduce_consumption"
+    category: "energy"
+    description: "Reduce energy consumption"
+    approval_required: "operator"
+    approval_threshold: "LOW"
+    allowed: true
+    forbidden_with: []
+    priority: 10
+    estimated_impact:
+      cost_savings: 500
+
+# Approval level mapping (maps threshold to human approver role)
+approval_levels:
+  IMMEDIATE: "safety_officer"  # Direct to safety officer
+  CRITICAL: ["safety_officer", "manager"]  # Escalate to both
+  HIGH: "supervisor"  # Escalate to supervisor
+  MEDIUM: "supervisor"  # Supervisor approval
+  LOW: "operator"  # Operator can handle
+  AUTO: "automatic"  # No human approval needed
+
+# Conflict resolution rules: when multiple actions compete, how to resolve
+conflict_resolution:
+  safety_vs_production:
+    rule: "Always prioritize safety"
+    action: "execute_safety_action"
+    reasoning: "Safety first principle"
+    priority_override: true
+
+  safety_vs_cost:
+    rule: "Always prioritize safety"
+    action: "execute_safety_action"
+    reasoning: "Safety first principle"
+    priority_override: true
+
+  quality_vs_production:
+    rule: "Prioritize quality unless production risk is critical"
+    action: "compare_impacts"
+    reasoning: "Quality prevents downstream costs"
+    priority_override: false
+
+  quality_vs_cost:
+    rule: "Prioritize quality if defect impact > cost savings"
+    action: "compare_impacts"
+    reasoning: "Scrap cost often exceeds cost savings"
+    priority_override: false
+
+# Constraints: what actions are never allowed together
+constraints:
+  simultaneous_constraints:
+    - ["contain_batch", "release_batch"]
+    - ["stop_line", "continue_production"]
+
+  time_constraints:
+    - action: "stop_line"
+      min_interval_seconds: 600  # Don't stop line more than once per 10 min
+      max_consecutive_stops: 3
+
+# Safety-critical rules
+safety_critical_rules:
+  - rule_id: "no_safety_bypass"
+    description: "Never disable or bypass certified safety systems"
+    enforcement: "STRICT"
+    action_if_violated: "REJECT_DECISION"
+
+  - rule_id: "zone_intrusion_immediate"
+    description: "Zone intrusion must always trigger immediate e-stop"
+    enforcement: "STRICT"
+    action_if_violated: "OVERRIDE_TO_ESTOP"
+
+  - rule_id: "human_override_capable"
+    description: "All automated actions must be manually overridable"
+    enforcement: "STRICT"
+    action_if_violated: "REQUIRE_SUPERVISION"
+
+# Evidence requirements: what signals must be present for action approval
+evidence_requirements:
+  stop_line:
+    required_signals: ["zone_intrusion"]
+    minimum_confidence: 0.95
+    minimum_signal_count: 1
+
+  contain_batch:
+    required_signals: ["defect_detection"]
+    minimum_confidence: 0.85
+    minimum_signal_count: 1
+
+  schedule_maintenance:
+    required_signals: ["vibration_anomaly"]
+    minimum_confidence: 0.80
+    minimum_signal_count: 1
+
+# Factory operating modes (affects which actions are allowed)
+operating_modes:
+  normal:
+    description: "Normal production mode"
+    allowed_actions: "all"
+    approval_required: true
+
+  maintenance:
+    description: "Factory in maintenance mode"
+    allowed_actions: ["schedule_maintenance", "escalate_critical", "adjust_schedule"]
+    approval_required: true
+
+  emergency:
+    description: "Emergency/shutdown mode"
+    allowed_actions: ["stop_line", "acknowledge_estop"]
+    approval_required: false
+
+  debug:
+    description: "Debug/simulation mode"
+    allowed_actions: "all"
+    approval_required: false
+
+# Notification rules: who to notify for each action
+notifications:
+  stop_line:
+    notify_roles: ["safety_officer", "supervisor", "manager"]
+    urgency: "immediate"
+
+  contain_batch:
+    notify_roles: ["supervisor", "quality_engineer"]
+    urgency: "high"
+
+  schedule_maintenance:
+    notify_roles: ["maintenance_team", "supervisor"]
+    urgency: "medium"
+
+# Audit requirements: what must be logged for each action
+audit_requirements:
+  default:
+    log_event: true
+    log_decision: true
+    log_approval: true
+    log_outcome: true
+    retention_days: 365
+
+  safety_critical:
+    log_event: true
+    log_decision: true
+    log_approval: true
+    log_outcome: true
+    retention_days: 1825  # 5 years for safety-critical
+
+# Default behavior when policy is violated
+policy_violation_behavior:
+  default_action: "REJECT_DECISION"
+  escalation_level: "manager"
+  log_violation: true
+  notify_safety_officer: true

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 from paaim.models import get_db, EventData, EventModel
 from paaim.agents.registry import get_registry
 from paaim.event_input.simulator import EventSimulator, ScenarioDifficulty
 from paaim.orchestrator import get_orchestrator
 from paaim.governance.audit_logger import AuditStore
+from paaim.streaming import get_publisher
 from datetime import datetime
 import uuid
 import json
@@ -363,3 +364,48 @@ async def get_compliance_report(
     return report
 
 
+# ===== WEBSOCKET STREAMING =====
+
+@router.websocket("/ws/orchestrate/{decision_id}")
+async def websocket_orchestration_stream(
+    websocket: WebSocket,
+    decision_id: str,
+):
+    """
+    WebSocket endpoint for real-time orchestration pipeline streaming.
+
+    Clients connect with a decision_id and receive live events as the
+    orchestration pipeline executes:
+    - agents_routing → agents_complete
+    - policy_checking → policy_complete
+    - twin_simulating → twin_complete
+    - red_team_challenging → red_team_complete
+    - approval_routing → approval_complete
+    - orchestration_completed or orchestration_error
+    """
+    await websocket.accept()
+    publisher = get_publisher()
+
+    async def send_event(event):
+        """Send event to WebSocket client."""
+        try:
+            await websocket.send_json(event.to_dict())
+        except Exception:
+            # Connection closed, will be caught by disconnect handler
+            pass
+
+    # Subscribe to events for this decision
+    publisher.subscribe(decision_id, send_event)
+
+    try:
+        # Keep connection open until client disconnects
+        while True:
+            # Receive (and ignore) any messages from client
+            # This is just to keep the connection alive and detect disconnections
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        # Client disconnected, unsubscribe
+        publisher.unsubscribe(decision_id, send_event)
+    except Exception as e:
+        publisher.unsubscribe(decision_id, send_event)
+        await websocket.close(code=1000)

@@ -12,6 +12,7 @@ import {
   ApprovalWorkflow,
   AuditTimeline,
 } from '@/components/DashboardComponents';
+import { LivePipeline } from '@/components/LivePipeline';
 
 export default function DecisionDetailPage({
   params,
@@ -228,6 +229,14 @@ export default function DecisionDetailPage({
                 Orchestration Pipeline
               </h2>
               <DecisionFlow layers={layers} />
+            </div>
+
+            {/* Live Pipeline Stream */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                Real-Time Pipeline (WebSocket)
+              </h2>
+              <LivePipeline decisionId={decision.decision_id} />
             </div>
 
             {/* Impact Estimates */}

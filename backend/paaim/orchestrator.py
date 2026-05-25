@@ -7,6 +7,7 @@ from paaim.agents.registry import get_registry
 from paaim.policy.engine import PolicyEngine
 from paaim.decision_twin.simulator import DecisionTwin
 from paaim.governance.red_team import RedTeamAgent
+from paaim.streaming import get_publisher, PipelineEventType, PipelineEvent
 
 
 class OrchestrationContext:
@@ -71,6 +72,7 @@ class Orchestrator:
         self.decision_twin = DecisionTwin()
         self.red_team = RedTeamAgent()
         self.registry = get_registry()
+        self.publisher = get_publisher()
 
     async def orchestrate(self, event: EventData) -> Dict[str, Any]:
         """
@@ -84,25 +86,129 @@ class Orchestrator:
         """
         ctx = OrchestrationContext(event)
 
-        # Layer 2: Route to specialist agents
-        await self._route_to_agents(ctx)
-        if not ctx.agent_analyses:
-            return self._error_response("No agents matched event type", ctx)
+        # Emit orchestration start
+        await self._emit_event(
+            PipelineEventType.ORCHESTRATION_STARTED,
+            ctx.decision_id,
+            "pipeline",
+            {
+                "event_type": event.event_type.value,
+                "signal_name": event.signal_name,
+                "factory_id": event.factory_id,
+            },
+        )
 
-        # Layer 3: Policy evaluation
-        self._evaluate_policy(ctx)
+        try:
+            # Layer 2: Route to specialist agents
+            await self._emit_event(
+                PipelineEventType.AGENTS_ROUTING,
+                ctx.decision_id,
+                "agents",
+                {"status": "routing"},
+            )
+            await self._route_to_agents(ctx)
+            if not ctx.agent_analyses:
+                return self._error_response("No agents matched event type", ctx)
 
-        # Layer 4: Decision Twin simulation
-        self._simulate_impacts(ctx)
+            await self._emit_event(
+                PipelineEventType.AGENTS_COMPLETE,
+                ctx.decision_id,
+                "agents",
+                {"agent_count": len(ctx.agent_analyses)},
+            )
 
-        # Layer 5: Red-Team challenge
-        self._challenge_recommendations(ctx)
+            # Layer 3: Policy evaluation
+            await self._emit_event(
+                PipelineEventType.POLICY_CHECKING,
+                ctx.decision_id,
+                "policy",
+                {"status": "evaluating"},
+            )
+            self._evaluate_policy(ctx)
+            await self._emit_event(
+                PipelineEventType.POLICY_COMPLETE,
+                ctx.decision_id,
+                "policy",
+                {"evaluations": len(ctx.policy_evaluations)},
+            )
 
-        # Layer 6: Approval routing
-        self._route_to_approval(ctx)
+            # Layer 4: Decision Twin simulation
+            await self._emit_event(
+                PipelineEventType.TWIN_SIMULATING,
+                ctx.decision_id,
+                "twin",
+                {"status": "simulating"},
+            )
+            self._simulate_impacts(ctx)
+            await self._emit_event(
+                PipelineEventType.TWIN_COMPLETE,
+                ctx.decision_id,
+                "twin",
+                {"simulations": len(ctx.impact_estimates)},
+            )
 
-        # Layer 7: Build decision and audit trail
-        return self._build_decision_response(ctx)
+            # Layer 5: Red-Team challenge
+            await self._emit_event(
+                PipelineEventType.RED_TEAM_CHALLENGING,
+                ctx.decision_id,
+                "red_team",
+                {"status": "challenging"},
+            )
+            self._challenge_recommendations(ctx)
+            await self._emit_event(
+                PipelineEventType.RED_TEAM_COMPLETE,
+                ctx.decision_id,
+                "red_team",
+                {"reviews": len(ctx.red_team_reviews)},
+            )
+
+            # Layer 6: Approval routing
+            await self._emit_event(
+                PipelineEventType.APPROVAL_ROUTING,
+                ctx.decision_id,
+                "approval",
+                {"status": "routing"},
+            )
+            self._route_to_approval(ctx)
+            await self._emit_event(
+                PipelineEventType.APPROVAL_COMPLETE,
+                ctx.decision_id,
+                "approval",
+                {"approval_route": ctx.approval_route},
+            )
+
+            # Layer 7: Build decision and audit trail
+            response = self._build_decision_response(ctx)
+
+            await self._emit_event(
+                PipelineEventType.ORCHESTRATION_COMPLETED,
+                ctx.decision_id,
+                "pipeline",
+                {"status": "success", "latency_ms": (datetime.utcnow() - ctx.timestamp_start).total_seconds() * 1000},
+            )
+
+            return response
+
+        except Exception as e:
+            await self._emit_event(
+                PipelineEventType.ORCHESTRATION_ERROR,
+                ctx.decision_id,
+                "pipeline",
+                {"error": str(e)},
+            )
+            raise
+
+    async def _emit_event(
+        self,
+        event_type: PipelineEventType,
+        decision_id: str,
+        layer: str,
+        data: Dict[str, Any],
+    ) -> None:
+        """Emit a pipeline event if there are subscribers."""
+        if self.publisher.has_subscribers(decision_id):
+            event = PipelineEvent(event_type, decision_id, layer, data)
+            await self.publisher.emit(event)
 
     async def _route_to_agents(self, ctx: OrchestrationContext) -> None:
         """Layer 2: Route event to matching specialist agents."""

@@ -1,0 +1,184 @@
+# PAAIM Helm Chart Values
+# Default values for production deployment
+
+# Replica configuration
+replicaCount: 3
+
+# Image configuration
+image:
+  repository: paaim/api
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Service configuration
+service:
+  type: LoadBalancer
+  port: 80
+  targetPort: 8000
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: api.paaim.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: paaim-tls
+      hosts:
+        - api.paaim.local
+
+# Resource requests and limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 500m
+    memory: 256Mi
+
+# Pod autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Node affinity
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app
+                operator: In
+                values:
+                  - paaim-api
+          topologyKey: kubernetes.io/hostname
+
+# Environment variables
+env:
+  - name: ENVIRONMENT
+    value: "production"
+  - name: LOG_LEVEL
+    value: "INFO"
+
+# Secrets (create these in your cluster)
+secrets:
+  - name: JWT_SECRET_KEY
+    key: jwt-secret-key
+  - name: ANTHROPIC_API_KEY
+    key: anthropic-api-key
+  - name: MES_PASSWORD
+    key: mes-password
+  - name: CMMS_PASSWORD
+    key: cmms-password
+
+# Database configuration
+database:
+  enabled: true
+  host: paaim-postgresql
+  port: 5432
+  name: paaim_db
+  user: paaim
+  # Password from secret
+
+# Redis configuration
+redis:
+  enabled: true
+  host: paaim-redis-master
+  port: 6379
+
+# PostgreSQL (from dependency)
+postgresql:
+  enabled: true
+  auth:
+    username: paaim
+    password: "change-me-in-production"
+    database: paaim_db
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# Redis (from dependency)
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false  # Enable in production
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "250m"
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    interval: 30s
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Network policy
+networkPolicy:
+  enabled: false  # Enable in production
+
+# Security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsReadOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

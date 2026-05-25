@@ -1,0 +1,36 @@
+apiVersion: v2
+name: paaim
+description: Policy-Aware Agentic Intelligence Manager for Manufacturing
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+
+maintainers:
+  - name: PAAIM Team
+    email: team@paaim.local
+
+keywords:
+  - manufacturing
+  - ai
+  - decision-making
+  - orchestration
+  - factory
+
+home: https://github.com/paaim/paaim
+sources:
+  - https://github.com/paaim/paaim
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+    tags:
+      - database
+
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+    tags:
+      - cache

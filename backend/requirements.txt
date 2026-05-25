@@ -14,6 +14,11 @@ anthropic==0.7.1
 structlog==24.1.0
 pythonjsonlogger==2.0.7
 
+# Authentication
+PyJWT==2.8.1
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
 # Testing
 pytest==7.4.4
 pytest-asyncio==0.23.2

@@ -1,0 +1,405 @@
+"""API endpoints for managing custom AI agents."""
+
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+from paaim.agents.custom_framework import (
+    get_custom_agent_registry,
+    CustomAgentDefinition,
+    DataSource,
+    Rule,
+    DataSourceType,
+    RuleOperator,
+    get_connector_for_source,
+)
+
+router = APIRouter()
+
+
+class DataSourceRequest(BaseModel):
+    """Request body for data source."""
+    name: str
+    type: str  # Must be a DataSourceType value
+    config: Dict[str, Any]
+    query: Optional[str] = None
+    auth_type: Optional[str] = None
+    auth_config: Optional[Dict[str, Any]] = None
+    poll_interval_seconds: int = 30
+    enabled: bool = True
+
+
+class RuleRequest(BaseModel):
+    """Request body for rule."""
+    field: str
+    operator: str  # Must be a RuleOperator value
+    value: Any
+    action: str
+    confidence: float = 0.8
+    priority: int = 1
+
+
+class CustomAgentRequest(BaseModel):
+    """Request body for creating/updating custom agent."""
+    name: str
+    description: str
+    domain: str
+    data_sources: List[DataSourceRequest]
+    rules: List[RuleRequest]
+    actions: List[str]
+    enabled: bool = True
+
+
+class CustomAgentResponse(BaseModel):
+    """Response for custom agent."""
+    id: str
+    name: str
+    description: str
+    domain: str
+    enabled: bool
+    created_at: str
+    created_by: Optional[str]
+
+
+@router.post("/create", status_code=status.HTTP_201_CREATED)
+async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentResponse:
+    """
+    Create a new custom AI agent.
+
+    - User specifies data sources (SCADA, CMS, IoT, REST API)
+    - User defines rules (if/then logic for decision-making)
+    - Agent automatically integrates into orchestration pipeline
+    """
+    try:
+        registry = get_custom_agent_registry()
+
+        # Validate operators
+        for rule in request.rules:
+            try:
+                RuleOperator(rule.operator)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid operator: {rule.operator}. Must be one of: {[op.value for op in RuleOperator]}"
+                )
+
+        # Validate data source types
+        for ds in request.data_sources:
+            try:
+                DataSourceType(ds.type)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid data source type: {ds.type}. Must be one of: {[t.value for t in DataSourceType]}"
+                )
+
+        # Build data sources
+        data_sources = [
+            DataSource(
+                name=ds.name,
+                type=DataSourceType(ds.type),
+                config=ds.config,
+                query=ds.query,
+                auth_type=ds.auth_type,
+                auth_config=ds.auth_config,
+                poll_interval_seconds=ds.poll_interval_seconds,
+                enabled=ds.enabled,
+            )
+            for ds in request.data_sources
+        ]
+
+        # Build rules
+        rules = [
+            Rule(
+                field=r.field,
+                operator=RuleOperator(r.operator),
+                value=r.value,
+                action=r.action,
+                confidence=r.confidence,
+                priority=r.priority,
+            )
+            for r in request.rules
+        ]
+
+        # Create agent definition
+        import uuid
+        agent_id = f"custom_agent_{uuid.uuid4().hex[:8]}"
+
+        definition = CustomAgentDefinition(
+            id=agent_id,
+            name=request.name,
+            description=request.description,
+            domain=request.domain,
+            data_sources=data_sources,
+            rules=rules,
+            actions=request.actions,
+            enabled=request.enabled,
+            created_by="api_user",
+        )
+
+        # Register agent
+        registry.register_agent(definition)
+
+        return CustomAgentResponse(
+            id=definition.id,
+            name=definition.name,
+            description=definition.description,
+            domain=definition.domain,
+            enabled=definition.enabled,
+            created_at=definition.created_at.isoformat(),
+            created_by=definition.created_by,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create custom agent: {str(e)}"
+        )
+
+
+@router.get("/list")
+async def list_custom_agents() -> dict:
+    """List all custom agents."""
+    try:
+        registry = get_custom_agent_registry()
+        agents = registry.list_agents()
+
+        custom_agents = [
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "description": agent.description,
+                "domain": agent.domain,
+                "enabled": agent.enabled,
+                "data_sources_count": len(agent.data_sources),
+                "rules_count": len(agent.rules),
+            }
+            for agent in agents
+        ]
+
+        return {
+            "agents": custom_agents,
+            "count": len(custom_agents),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list custom agents: {str(e)}"
+        )
+
+
+@router.get("/{agent_id}")
+async def get_custom_agent(agent_id: str) -> dict:
+    """Get details of a specific custom agent."""
+    try:
+        registry = get_custom_agent_registry()
+        agent = registry.get_agent(agent_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "description": agent.description,
+            "domain": agent.domain,
+            "enabled": agent.enabled,
+            "data_sources": [
+                {
+                    "name": ds.name,
+                    "type": ds.type.value,
+                    "poll_interval_seconds": ds.poll_interval_seconds,
+                    "enabled": ds.enabled,
+                }
+                for ds in agent.data_sources
+            ],
+            "rules": [
+                {
+                    "field": r.field,
+                    "operator": r.operator.value,
+                    "value": r.value,
+                    "action": r.action,
+                    "confidence": r.confidence,
+                    "priority": r.priority,
+                }
+                for r in agent.rules
+            ],
+            "actions": agent.actions,
+            "created_at": agent.created_at.isoformat(),
+            "created_by": agent.created_by,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve custom agent: {str(e)}"
+        )
+
+
+@router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_custom_agent(agent_id: str):
+    """Delete a custom agent."""
+    try:
+        registry = get_custom_agent_registry()
+        agent = registry.get_agent(agent_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        registry.unregister_agent(agent_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete custom agent: {str(e)}"
+        )
+
+
+@router.post("/{agent_id}/test-connection")
+async def test_data_source_connection(agent_id: str, source_name: str) -> dict:
+    """Test connection to a data source for a custom agent."""
+    try:
+        registry = get_custom_agent_registry()
+        agent = registry.get_agent(agent_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        # Find data source
+        data_source = None
+        for ds in agent.data_sources:
+            if ds.name == source_name:
+                data_source = ds
+                break
+
+        if not data_source:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Data source '{source_name}' not found in agent"
+            )
+
+        # Test connection
+        connector = get_connector_for_source(data_source)
+        if not connector:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported data source type: {data_source.type.value}"
+            )
+
+        success, message = await connector.test_connection()
+
+        return {
+            "source_name": source_name,
+            "success": success,
+            "message": message,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to test connection: {str(e)}"
+        )
+
+
+@router.post("/{agent_id}/execute")
+async def execute_custom_agent(agent_id: str, input_data: Optional[Dict[str, Any]] = None) -> dict:
+    """
+    Manually execute a custom agent.
+
+    - If input_data provided, uses that data
+    - Otherwise fetches from connected data sources
+    """
+    try:
+        registry = get_custom_agent_registry()
+        agent = registry.get_agent(agent_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        recommendations = await registry.execute_agent_async(agent_id, input_data)
+
+        return {
+            "agent_id": agent_id,
+            "agent_name": agent.name,
+            "recommendations": recommendations,
+            "count": len(recommendations),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute custom agent: {str(e)}"
+        )
+
+
+@router.post("/{agent_id}/enable")
+async def enable_custom_agent(agent_id: str) -> dict:
+    """Enable a custom agent."""
+    try:
+        registry = get_custom_agent_registry()
+        registry.enable_agent(agent_id)
+
+        agent = registry.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "enabled": agent.enabled,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enable custom agent: {str(e)}"
+        )
+
+
+@router.post("/{agent_id}/disable")
+async def disable_custom_agent(agent_id: str) -> dict:
+    """Disable a custom agent."""
+    try:
+        registry = get_custom_agent_registry()
+        registry.disable_agent(agent_id)
+
+        agent = registry.get_agent(agent_id)
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "enabled": agent.enabled,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to disable custom agent: {str(e)}"
+        )

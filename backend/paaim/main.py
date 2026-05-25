@@ -133,9 +133,10 @@ async def connector_health():
 
 
 # Import and include routers
-from paaim.api import events, agents, auth
+from paaim.api import events, agents, auth, custom_agents
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
+app.include_router(custom_agents.router, prefix="/api/custom-agents", tags=["custom-agents"])
 

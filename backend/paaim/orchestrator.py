@@ -2,12 +2,13 @@ import uuid
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
-from paaim.models import EventData, Decision, EvidencePack, DecisionStatus, EventType
+from paaim.models import EventData, Decision, EvidencePack, DecisionStatus, EventType, RiskLevel
 from paaim.agents.registry import get_registry
 from paaim.policy.engine import PolicyEngine
 from paaim.decision_twin.simulator import DecisionTwin
 from paaim.governance.red_team import RedTeamAgent
 from paaim.streaming import get_publisher, PipelineEventType, PipelineEvent
+from paaim.agents.custom_framework import get_custom_agent_registry
 
 
 class OrchestrationContext:
@@ -72,6 +73,7 @@ class Orchestrator:
         self.decision_twin = DecisionTwin()
         self.red_team = RedTeamAgent()
         self.registry = get_registry()
+        self.custom_registry = get_custom_agent_registry()
         self.publisher = get_publisher()
 
     async def orchestrate(self, event: EventData) -> Dict[str, Any]:
@@ -211,9 +213,10 @@ class Orchestrator:
             await self.publisher.emit(event)
 
     async def _route_to_agents(self, ctx: OrchestrationContext) -> None:
-        """Layer 2: Route event to matching specialist agents."""
-        agents = self.registry.get_agents_for_event(ctx.event.event_type.value)
+        """Layer 2: Route event to matching specialist agents and custom agents."""
+        agents = self.registry.get_agents_for_event_type(ctx.event.event_type.value)
 
+        # Run built-in agents
         for agent in agents:
             try:
                 analysis = await agent.analyze({
@@ -245,6 +248,40 @@ class Orchestrator:
             except Exception as e:
                 ctx.agent_analyses.append({
                     "agent": agent.name,
+                    "error": str(e),
+                })
+
+        # Run custom agents
+        for custom_agent in self.custom_registry.list_agents():
+            if not custom_agent.enabled:
+                continue
+
+            try:
+                # Prepare event data for custom agent
+                event_data = {
+                    "event_type": ctx.event.event_type.value,
+                    "signal_name": ctx.event.signal_name,
+                    "signal_value": ctx.event.signal_value,
+                    "confidence": ctx.event.confidence,
+                }
+                event_data.update(ctx.event.context)
+
+                # Execute custom agent
+                recommendations = await self.custom_registry.execute_agent_async(
+                    custom_agent.id,
+                    event_data
+                )
+
+                if recommendations:
+                    ctx.agent_analyses.append({
+                        "agent": custom_agent.name,
+                        "confidence": 0.8,  # Average confidence from custom agent rules
+                        "reasoning": f"Custom agent {custom_agent.domain} evaluated event",
+                        "recommendations": recommendations,
+                    })
+            except Exception as e:
+                ctx.agent_analyses.append({
+                    "agent": custom_agent.name,
                     "error": str(e),
                 })
 
@@ -317,7 +354,7 @@ class Orchestrator:
                     confidence=rec["confidence"],
                     evidence_signals=rec["evidence_signals"],
                     event_context=ctx.event.context,
-                    risk_level=rec["risk_level"],  # RiskLevel enum
+                    risk_level=RiskLevel(rec["risk_level"]),
                 )
 
                 ctx.red_team_reviews[action_name] = {

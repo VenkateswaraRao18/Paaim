@@ -12,10 +12,10 @@ anthropic==0.7.1
 
 # Manufacturing connectors
 structlog==24.1.0
-pythonjsonlogger==2.0.7
+python-json-logger==2.0.7
 
 # Authentication
-PyJWT==2.8.1
+PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 

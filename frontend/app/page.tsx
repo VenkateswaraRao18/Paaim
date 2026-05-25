@@ -27,12 +27,14 @@ export default function Home() {
               </div>
             </Link>
 
-            <div className="bg-white rounded-lg shadow-md p-8">
-              <h2 className="text-2xl font-bold text-purple-600 mb-4">⚙️ Agents</h2>
-              <p className="text-gray-600">
-                5 specialist agents (Safety, Quality, Maintenance, Production, Energy)
-              </p>
-            </div>
+            <Link href="/custom-agents">
+              <div className="bg-white rounded-lg shadow-md p-8 hover:shadow-lg transition-shadow cursor-pointer h-full">
+                <h2 className="text-2xl font-bold text-purple-600 mb-4">⚡ Custom Agents</h2>
+                <p className="text-gray-600">
+                  No-code agent builder: connect SCADA, CMS, IoT and define policies
+                </p>
+              </div>
+            </Link>
 
             <Link href="/audit">
               <div className="bg-white rounded-lg shadow-md p-8 hover:shadow-lg transition-shadow cursor-pointer h-full">

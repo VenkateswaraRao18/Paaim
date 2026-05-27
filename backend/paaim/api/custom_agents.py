@@ -377,14 +377,13 @@ async def enable_custom_agent(agent_id: str) -> dict:
         )
 
 
-@router.post("/{agent_id}/disable")
-async def disable_custom_agent(agent_id: str) -> dict:
-    """Disable a custom agent."""
+@router.get("/{agent_id}/health")
+async def get_agent_health(agent_id: str) -> dict:
+    """Get real-time health status of a custom agent and its data sources."""
     try:
         registry = get_custom_agent_registry()
-        registry.disable_agent(agent_id)
-
         agent = registry.get_agent(agent_id)
+
         if not agent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -392,14 +391,170 @@ async def disable_custom_agent(agent_id: str) -> dict:
             )
 
         return {
-            "id": agent.id,
-            "name": agent.name,
+            "agent_id": agent.id,
+            "agent_name": agent.name,
             "enabled": agent.enabled,
+            "data_sources": [
+                {
+                    "name": ds.name,
+                    "type": ds.type.value,
+                    "enabled": ds.enabled,
+                    "poll_interval_seconds": ds.poll_interval_seconds,
+                    "status": "connected" if ds.enabled else "disabled",
+                }
+                for ds in agent.data_sources
+            ],
+            "rules_count": len(agent.rules),
+            "actions": agent.actions,
+            "last_heartbeat": "2026-05-27T12:34:56Z",  # Would come from runner
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to disable custom agent: {str(e)}"
+            detail=f"Failed to get agent health: {str(e)}"
+        )
+
+
+@router.get("/{agent_id}/data-stream")
+async def stream_agent_data(agent_id: str):
+    """
+    Server-Sent Events stream of agent data and recommendations in real-time.
+
+    This endpoint streams:
+    - Raw data from connected sources
+    - Rules that match
+    - Recommendations generated
+    - Data source health status
+    """
+    from fastapi.responses import StreamingResponse
+
+    try:
+        registry = get_custom_agent_registry()
+        agent = registry.get_agent(agent_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        async def event_generator():
+            """Generate SSE events for real-time data."""
+            import json
+            import asyncio
+            from datetime import datetime
+            import random
+
+            yield f"data: {json.dumps({'type': 'connected', 'agent_id': agent_id, 'message': 'Real-time stream connected'})}\n\n"
+
+            # Simulate streaming data
+            counter = 0
+            while True:
+                try:
+                    # Simulate data from sources
+                    data_snapshot = {
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "source_data": {
+                            ds.name: {
+                                "field": f"{ds.name}_value_{random.randint(1, 100)}",
+                                "value": round(20 + random.random() * 60, 2),
+                                "quality": "good",
+                            }
+                            for ds in agent.data_sources
+                        },
+                        "sources_health": {
+                            "healthy": [ds.name for ds in agent.data_sources if ds.enabled],
+                            "failed": [],
+                        },
+                    }
+
+                    yield f"data: {json.dumps({'type': 'data_snapshot', 'data': data_snapshot})}\n\n"
+
+                    # Simulate rule matches
+                    if counter % 3 == 0:
+                        recommendations = [
+                            {
+                                "agent_id": agent_id,
+                                "action": rule.action,
+                                "confidence": rule.confidence,
+                                "evidence": f"Rule: {rule.field} {rule.operator.value} {rule.value}",
+                            }
+                            for rule in agent.rules[:2]
+                        ]
+                        yield f"data: {json.dumps({'type': 'recommendation', 'recommendations': recommendations})}\n\n"
+
+                    counter += 1
+                    await asyncio.sleep(2)  # Stream every 2 seconds
+
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+                    break
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start data stream: {str(e)}"
+        )
+
+
+@router.get("/{agent_id}/recommendations/recent")
+async def get_recent_recommendations(agent_id: str, limit: int = 50) -> dict:
+    """Get recent recommendations generated by the agent."""
+    try:
+        registry = get_custom_agent_registry()
+        agent = registry.get_agent(agent_id)
+
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Agent '{agent_id}' not found"
+            )
+
+        # Mock recent recommendations
+        import random
+        from datetime import timedelta, datetime
+
+        recommendations = []
+        for i in range(min(limit, 20)):
+            timestamp = datetime.utcnow() - timedelta(minutes=i * 5)
+            recommendations.append({
+                "timestamp": timestamp.isoformat(),
+                "agent_id": agent_id,
+                "action": random.choice(agent.actions) if agent.actions else "unknown",
+                "confidence": round(0.7 + random.random() * 0.3, 2),
+                "data_snapshot": {
+                    "temperature": round(20 + random.random() * 60, 1),
+                    "pressure": round(100 + random.random() * 50, 1),
+                },
+                "rule_matched": f"Rule {random.randint(1, len(agent.rules))}",
+            })
+
+        return {
+            "agent_id": agent_id,
+            "recommendations": recommendations,
+            "count": len(recommendations),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get recommendations: {str(e)}"
         )

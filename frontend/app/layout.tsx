@@ -1,5 +1,6 @@
 import './globals.css'
 import { Providers } from '@/components/Providers'
+import MainLayout from '@/components/MainLayout'
 
 export const metadata = {
   title: 'PAAIM Dashboard',
@@ -14,7 +15,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          <MainLayout>{children}</MainLayout>
+        </Providers>
       </body>
     </html>
   )

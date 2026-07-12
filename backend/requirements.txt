@@ -1,30 +1,51 @@
+# ── Web framework ──────────────────────────────────────────────────────────────
 fastapi==0.109.1
 uvicorn[standard]==0.27.0
+
+# ── Database ───────────────────────────────────────────────────────────────────
 sqlalchemy==2.0.23
 alembic==1.13.1
-psycopg2-binary==2.9.9
+aiosqlite==0.19.0          # async SQLite driver (dev)
+asyncpg==0.29.0            # async PostgreSQL driver (production)
+psycopg2-binary==2.9.9     # sync PostgreSQL driver (Alembic migrations)
+
+# ── Config & validation ────────────────────────────────────────────────────────
 pydantic==2.5.3
 pydantic-settings==2.1.0
 python-dotenv==1.0.0
-redis==5.0.1
-httpx==0.25.2
-anthropic==0.7.1
 
-# Manufacturing connectors
+# ── AI — Google Gemini ─────────────────────────────────────────────────────────
+google-generativeai==0.8.3
+
+# ── Caching / streaming ────────────────────────────────────────────────────────
+redis==5.0.1
+
+# ── HTTP client (connector framework) ─────────────────────────────────────────
+httpx==0.25.2
+
+# ── Observability ──────────────────────────────────────────────────────────────
+prometheus-client==0.20.0
 structlog==24.1.0
 python-json-logger==2.0.7
 
-# Authentication
+# ── Authentication ─────────────────────────────────────────────────────────────
 PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
-# Testing
+# ── Testing ────────────────────────────────────────────────────────────────────
 pytest==7.4.4
 pytest-asyncio==0.23.2
 pytest-cov==4.1.0
 
-# Code quality
+# ── Code quality ───────────────────────────────────────────────────────────────
 black==23.12.1
 mypy==1.7.1
 ruff==0.1.11
+
+# ── Reliable ingestion backbone (optional) ──────────────────────────────────────
+# Only needed when EVENT_BUS=kafka. The default "memory" backend (durable JSONL
+# log) needs nothing extra and is imported lazily, so the app runs without this.
+# aiokafka==0.10.0
+# The MCP server is hand-rolled (stdio JSON-RPC), no package needed; the official
+# `mcp` SDK requires Python >=3.10 (this project runs on 3.9).

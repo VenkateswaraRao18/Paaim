@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   PAAIM Design System — "Field Ops / Pine & Amber"
+   See DESIGN.md at repo root. Do not drift back to generic blue.
+   ============================================================ */
+
+:root {
+  --pine:   #123A2E;  /* darkest green — big numbers, strongest text accents */
+  --pine-2: #1B5443;  /* primary brand — buttons, fills, links, headings */
+  --moss:   #7FA893;  /* soft green — success hints, hover borders, labels */
+  --paper:  #F3F5F2;  /* page background — warm off-white with green cast */
+  --card:   #FFFFFF;  /* surface — cards sit on paper */
+  --ink:    #17211C;  /* body text — near-black with green undertone */
+  --dim:    #5E6B64;  /* secondary text — captions, hints, labels */
+  --amber:  #E8A13D;  /* THE signal colour — "now", warnings, highlights */
+  --coral:  #D8492B;  /* danger only — faults, missed targets */
+  --line:   #DDE4DF;  /* borders and dividers — tinted, not gray */
+
+  /* state surfaces = tints, never new colours */
+  --surface-ok:   #EDF4EF;
+  --surface-warn: #FBF3E3;
+  --surface-bad:  #FBEAE5;
+
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -13,9 +38,75 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* ── Typography primitives ─────────────────────────────────── */
+
+/* Eyebrow: mono, uppercase, wide tracking — the signature label */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--pine-2);
+  font-weight: 600;
+}
+.eyebrow--dim { color: var(--dim); }
+
+/* Anything numeric or machine-like uses mono */
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Tight headings with an optional tinted accent word */
+.h-tight { letter-spacing: -0.02em; }
+.accent  { color: var(--pine-2); }
+.accent-amber { color: var(--amber); }
+
+/* ── Card-on-paper ─────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+/* ── Signal states (colour always means something) ─────────── */
+.signal-ok   { color: var(--pine-2);  background: var(--surface-ok);   }
+.signal-warn { color: #9A6B15;        background: var(--surface-warn); }
+.signal-bad  { color: var(--coral);   background: var(--surface-bad);  }
+
+/* Left-border alert pattern */
+.alert       { border-left: 4px solid; border-radius: 8px; }
+.alert-info  { border-color: var(--pine-2); background: var(--surface-ok);   }
+.alert-warn  { border-color: var(--amber);  background: var(--surface-warn); }
+.alert-bad   { border-color: var(--coral);  background: var(--surface-bad);  }
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-primary {
+  background: var(--pine-2);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+.btn-primary:hover { background: var(--pine); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--pine-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-ghost:hover { background: var(--surface-ok); border-color: var(--moss); }
+
+/* ── Scrollbars, on-palette ────────────────────────────────── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--moss); }
+::-webkit-scrollbar-track { background: transparent; }

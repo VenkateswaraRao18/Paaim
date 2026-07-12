@@ -1,0 +1,126 @@
+# PAAIM Industry Pack — Automotive Manufacturing
+# Tier 1 / OEM supplier profile
+# Target: High-volume precision parts, JIT delivery, IATF 16949 compliance
+
+pack_id: automotive
+version: "1.0"
+display_name: Automotive Manufacturing
+description: >
+  Tier 1 / OEM supplier profile for high-volume precision manufacturing.
+  Covers IATF 16949 quality requirements, JIT delivery risk, and safety
+  standards aligned with ISO 45001.
+
+# ── Cost model ────────────────────────────────────────────────────
+costs:
+  downtime_cost_per_hour_usd: 8500        # high-volume line, expensive downtime
+  scrap_cost_per_unit_usd: 85
+  rework_cost_per_unit_usd: 30
+  late_delivery_penalty_per_day_usd: 5000 # OEM contracts have strict penalties
+  labor_cost_per_hour_usd: 90
+  planned_maintenance_cost_per_hour_usd: 250
+  unplanned_failure_multiplier: 6.0       # automotive: unplanned is very expensive
+  overtime_rate_multiplier: 1.5
+
+# ── Approval matrix ───────────────────────────────────────────────
+approval_matrix:
+  stop_line:               safety_officer
+  acknowledge_estop:       auto
+  contain_batch:           supervisor
+  inspect_root_cause:      operator
+  schedule_maintenance:    operator
+  escalate_critical:       plant_manager
+  propose_recovery_plan:   supervisor
+  adjust_schedule:         supervisor
+  shift_non_critical_load: operator
+  reduce_consumption:      operator
+
+# ── Defect taxonomy ───────────────────────────────────────────────
+defect_taxonomy:
+  - type: dimensional_deviation
+    severity: major
+    disposition: rework_or_scrap
+    customer_notification: true
+    iatf_record_required: true
+  - type: surface_crack
+    severity: critical
+    disposition: scrap
+    customer_notification: true
+    iatf_record_required: true
+  - type: tool_mark
+    severity: minor
+    disposition: rework
+    customer_notification: false
+    iatf_record_required: false
+  - type: porosity
+    severity: critical
+    disposition: scrap
+    customer_notification: true
+    iatf_record_required: true
+  - type: burr
+    severity: minor
+    disposition: rework
+    customer_notification: false
+    iatf_record_required: false
+  - type: hardness_deviation
+    severity: major
+    disposition: hold_for_review
+    customer_notification: true
+    iatf_record_required: true
+
+# ── KPI targets ───────────────────────────────────────────────────
+kpi_targets:
+  oee: 88
+  availability: 95
+  quality_rate: 99.5   # automotive: very tight
+  scrap_rate: 0.3
+  mtbf_hours: 600
+  mttr_hours: 1.5
+  pm_compliance: 97
+  throughput_units_per_shift: 1200
+
+# ── Agent configuration ───────────────────────────────────────────
+agents:
+  safety_agent:
+    enabled: true
+    escalation_threshold: 0.85       # lower = escalate sooner
+    auto_stop_on_critical: true
+  quality_agent:
+    enabled: true
+    defect_rate_trigger: 0.8         # % defect rate that triggers action
+    spc_monitoring: true             # Statistical Process Control
+  maintenance_agent:
+    enabled: true
+    vibration_sigma_trigger: 2.5     # trigger at 2.5σ for automotive
+    predictive_window_hours: 72
+  production_agent:
+    enabled: true
+    jit_buffer_hours: 4              # JIT: flag when < 4h buffer
+  energy_agent:
+    enabled: true
+
+# ── Model router overrides ────────────────────────────────────────
+model_router:
+  rules: rules_engine_v1
+  fast: gemini-2.0-flash
+  smart: gemini-1.5-pro
+  best: claude-sonnet-4-6            # safety decisions: use best model
+
+# ── Compliance standards ──────────────────────────────────────────
+compliance:
+  - IATF 16949
+  - ISO 45001
+  - ISO 14001
+  - PPAP required for new products
+  - MSA studies required for new gauges
+
+# ── Shift configuration ───────────────────────────────────────────
+shifts:
+  - name: Day
+    start: "06:00"
+    end: "14:00"
+  - name: Afternoon
+    start: "14:00"
+    end: "22:00"
+  - name: Night
+    start: "22:00"
+    end: "06:00"

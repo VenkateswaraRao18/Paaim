@@ -1,0 +1,16 @@
+log_id,machine_id,date,signal_name,raw_note,resolution,downtime_min,technician
+ML-1001,cnc_mill_01,2026-01-14,heat_dissipation_loss,"spndl ovrheat 0x4F3 agn - clnt flow low",Cleaned coolant filter + bled air from line; temp normalised in 20m,35,J.Ortiz
+ML-1002,cnc_mill_01,2026-02-03,heat_dissipation_loss,"0x4F3 spindle temp climbing, coolant pmp noisy",Replaced coolant pump impeller; flow restored,90,R.Singh
+ML-1003,cnc_mill_01,2026-03-19,heat_dissipation_loss,"ovrheat warn, filter clogged w/ chips",Swapped coolant filter cartridge; ran fine after,25,J.Ortiz
+ML-1010,robot_arm_01,2026-01-22,tool_wear_degradation,"E-201 tool wear lim, finish rough on part",Changed cutting insert #4 + reset wear counter,18,M.Lee
+ML-1011,robot_arm_01,2026-02-11,tool_wear_degradation,"E201 again - dim out of tol on bearing housing",Replaced tool + recalibrated offset; QC passed,30,M.Lee
+ML-1012,robot_arm_01,2026-03-08,tool_wear_degradation,"tool wear alarm mid-run Ford job",Hot-swapped insert, flagged WO for early PM next shift,22,A.Patel
+ML-1020,robot_arm_01,2026-01-30,vibration_anomaly,"VIB-HH bearing whine, rms high",Greased joint 3 bearing; vib dropped to 3mm/s,40,R.Singh
+ML-1021,robot_arm_01,2026-02-27,vibration_anomaly,"vib hi-hi, play in J3 axis",Replaced J3 bearing assembly - worn race,150,R.Singh
+ML-1022,robot_arm_01,2026-04-02,vibration_anomaly,"VIBHH spike then settled, susp loose mount",Re-torqued base mounting bolts; monitored ok,20,A.Patel
+ML-1030,cnc_cluster_03,2026-02-09,power_envelope_breach,"P-FAIL drive overcurrent trip",Reset VFD, found worn drive belt slipping; replaced,75,J.Ortiz
+ML-1031,cnc_cluster_03,2026-03-14,power_envelope_breach,"pwr spike PFAIL on startup",Tightened bus connection, cleaned contactor,45,M.Lee
+ML-1040,cnc_lathe_01,2026-01-18,mechanical_overstrain,"OS-12 overstrain, chatter on cut",Reduced feed rate + changed worn tool; ok,28,A.Patel
+ML-1041,cnc_lathe_01,2026-03-25,mechanical_overstrain,"OS12 load high, part material harder batch",Adjusted speed/feed for hard lot; logged to quality,33,M.Lee
+ML-1050,press_line_01,2026-02-16,coolant_pressure,"HYD-LO press drop ln1",Found seal leak on cylinder 2; replaced seal kit,120,R.Singh
+ML-1051,press_line_01,2026-03-29,coolant_pressure,"hyd lo pressure, pump cavitation noise",Topped hydraulic fluid + bled system; pressure ok,50,J.Ortiz

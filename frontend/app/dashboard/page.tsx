@@ -1,365 +1,285 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 import {
   useEventsList,
-  useScenarioCatalog,
-  useOrchestratScenario,
+  useAnalyticsSummary,
+  useDecisionsList,
+  useApproveDecision,
+  type DecisionListItem,
 } from '@/lib/api-client';
-import {
-  useDashboardStore,
-  useSelectedFactory,
-  useActiveTab,
-  useFilters,
-} from '@/lib/store';
+import { useSelectedFactory } from '@/lib/store';
+import { plainSignal, plainAction, plainMachine } from '@/lib/labels';
+import { Eyebrow, SectionHeader, Card, KpiTile, SignalPill, AlertBar } from '@/components/ui';
 
+type Tone = 'ok' | 'warn' | 'bad' | 'neutral';
+
+// ─── mapping helpers (signal discipline — no rainbow) ──────────────
+function eventTone(eventType: string): Tone {
+  if (eventType === 'safety') return 'bad';
+  if (eventType === 'quality' || eventType === 'energy') return 'warn';
+  return 'neutral'; // maintenance, production
+}
+function riskTone(risk?: string): Tone {
+  if (risk === 'critical' || risk === 'high') return 'bad';
+  if (risk === 'medium') return 'warn';
+  return 'neutral';
+}
+function statusTone(status: string): Tone {
+  if (status === 'recommended') return 'warn';
+  if (status === 'approved' || status === 'executed') return 'ok';
+  if (status === 'rejected') return 'bad';
+  return 'neutral';
+}
+const dotClass: Record<Tone, string> = {
+  ok: 'bg-pine-2', warn: 'bg-amber', bad: 'bg-coral', neutral: 'bg-moss',
+};
+
+function timeAgo(ts?: string): string {
+  if (!ts) return '—';
+  const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+// ─── Monitors (right rail, slim, no emoji) ─────────────────────────
+const MONITORS = ['Safety', 'Quality', 'Maintenance', 'Production', 'Energy'];
+
+// ─── Decision card — the fused incident+decision object ────────────
+function DecisionCard({
+  d, incident, pending, busy, onApprove, onReject,
+}: {
+  d: DecisionListItem;
+  incident?: { machine_id?: string; signal_name?: string; event_type?: string };
+  pending: boolean;
+  busy: boolean;
+  onApprove: (e: React.MouseEvent) => void;
+  onReject: (e: React.MouseEvent) => void;
+}) {
+  const action = plainAction(d.recommended_action?.selected_action ?? 'unknown');
+  const risk = d.recommended_action?.risk_level;
+  const conf = d.recommended_action?.confidence;
+  const rTone = riskTone(risk);
+  const machine = incident?.machine_id ? plainMachine(incident.machine_id) : null;
+  const signal = incident?.signal_name ? plainSignal(incident.signal_name) : null;
+
+  return (
+    <Card focal={pending} className="p-4">
+      {/* Incident line — what happened */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${pending ? 'bg-amber animate-pulse' : dotClass[statusTone(d.status)]}`} />
+        <span className="text-[13px] font-semibold text-ink truncate">
+          {signal ?? 'Incident'}{machine && <span className="text-dim font-normal"> · {machine}</span>}
+        </span>
+        <span className="font-mono text-[10.5px] text-dim uppercase tracking-wide ml-auto shrink-0">{timeAgo(d.created_at)}</span>
+      </div>
+
+      {/* Agent verdict → recommendation (the chain) */}
+      <div className="pl-4 border-l-2 border-line ml-1 space-y-1.5">
+        {(risk || conf != null) && (
+          <p className="font-mono text-[11px] text-dim uppercase tracking-wide">
+            Agents: {risk ?? 'assessed'} risk{conf != null && ` · ${Math.round(conf * 100)}% confidence`}
+          </p>
+        )}
+        <p className="text-[14px] text-ink">
+          <span className="text-dim">→ Recommended: </span>
+          <span className="font-semibold text-pine-2">{action}</span>
+        </p>
+      </div>
+
+      {/* Action row */}
+      <div className="flex items-center gap-2 mt-3.5">
+        {pending ? (
+          <>
+            <button onClick={onApprove} disabled={busy} className="btn-primary px-3.5 py-1.5 text-[13px] disabled:opacity-50">
+              {busy ? '…' : 'Approve'}
+            </button>
+            <button onClick={onReject} disabled={busy} className="px-3.5 py-1.5 text-[13px] font-semibold rounded-lg border border-coral/40 text-coral hover:bg-surface-bad disabled:opacity-50 transition-colors">
+              Reject
+            </button>
+            <Link href={`/dashboard/${d.decision_id}`} className="ml-auto text-[13px] font-semibold text-pine-2 hover:text-pine">
+              See full reasoning →
+            </Link>
+          </>
+        ) : (
+          <>
+            <SignalPill tone={statusTone(d.status)}>{d.status}</SignalPill>
+            {risk && <SignalPill tone={rTone}>{risk} risk</SignalPill>}
+            {d.approved_by && <span className="text-[11px] text-dim">✓ {d.approved_by}</span>}
+            <Link href={`/dashboard/${d.decision_id}`} className="ml-auto text-[13px] font-semibold text-pine-2 hover:text-pine">
+              View →
+            </Link>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const queryClient = useQueryClient();
   const selectedFactory = useSelectedFactory();
-  const activeTab = useActiveTab();
-  const filters = useFilters();
-  const setActiveTab = useDashboardStore((s) => s.setActiveTab);
-  const addDecision = useDashboardStore((s) => s.addDecision);
-  const decisions = useDashboardStore((s) => s.decisions);
-  const activeDecision = useDashboardStore((s) => s.activeDecision);
-  const setActiveDecision = useDashboardStore((s) => s.setActiveDecision);
 
   const { data: eventsList, isLoading: eventsLoading } = useEventsList(selectedFactory);
-  const { data: scenarios, isLoading: scenariosLoading } = useScenarioCatalog();
-  const orchestrateScenario = useOrchestratScenario();
+  const { data: analyticsData } = useAnalyticsSummary(selectedFactory);
+  const { data: decisionsData, isLoading: decisionsLoading } = useDecisionsList(selectedFactory, 100);
+  const approveMutation = useApproveDecision();
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  const [runningScenarioId, setRunningScenarioId] = useState<string | null>(null);
-  const [runError, setRunError] = useState<string | null>(null);
+  const incidents: any[] = eventsList?.events ?? [];
+  const dbDecisions: DecisionListItem[] = decisionsData?.decisions ?? [];
+  const pending = dbDecisions.filter((d) => d.status === 'recommended');
+  const resolved = dbDecisions.filter((d) => d.status !== 'recommended');
 
-  const incidents = eventsList?.events || [];
-  const filteredIncidents = incidents.filter((event: any) => {
-    if (filters.eventType && event.event_type !== filters.eventType) return false;
-    return true;
-  });
+  // Join decision → its triggering incident (best-effort on event_id)
+  const eventById = new Map<string, any>();
+  incidents.forEach((e) => { const id = e.id ?? e.event_id; if (id) eventById.set(String(id), e); });
+  const incidentFor = (d: DecisionListItem) => eventById.get(String(d.event_id));
 
-  const handleGenerateScenario = async (scenarioId: string) => {
-    setRunningScenarioId(scenarioId);
-    setRunError(null);
+  const handleApproval = async (decisionId: string, action: 'approve' | 'reject', e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setApprovingId(decisionId);
     try {
-      const result = await orchestrateScenario.mutateAsync(scenarioId);
-      [...result.decisions].reverse().forEach((d) => addDecision(d as any));
-      queryClient.invalidateQueries({ queryKey: ['events', selectedFactory] });
-      setActiveTab('decisions');
-    } catch (err) {
-      console.error('Failed to orchestrate scenario:', err);
-      setRunError(err instanceof Error ? err.message : 'Failed to run scenario');
+      await approveMutation.mutateAsync({ decisionId, action, approvedBy: 'operator' });
+      queryClient.invalidateQueries({ queryKey: ['decisions', 'list'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
     } finally {
-      setRunningScenarioId(null);
+      setApprovingId(null);
     }
   };
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-[1180px] space-y-6">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg p-8"
-      >
-        <h1 className="text-4xl font-bold mb-2">Dashboard</h1>
-        <p className="text-blue-100">
-          Real-time incident tracking and decision monitoring for {selectedFactory}
-        </p>
-      </motion.div>
-
-      {/* Stats Overview */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-4 gap-4"
-      >
-        {[
-          { label: 'Active Incidents', value: filteredIncidents.length, color: 'bg-red-50 text-red-600' },
-          { label: 'Decisions Made', value: decisions.length, color: 'bg-blue-50 text-blue-600' },
-          { label: 'Approval Rate', value: '94%', color: 'bg-green-50 text-green-600' },
-          { label: 'Avg Latency', value: '1.2s', color: 'bg-purple-50 text-purple-600' },
-        ].map((stat, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.05 }}
-            className={`${stat.color} rounded-lg p-6 font-semibold`}
-          >
-            <div className="text-sm opacity-75 mb-1">{stat.label}</div>
-            <div className="text-3xl font-bold">{stat.value}</div>
-          </motion.div>
-        ))}
-      </motion.div>
-
-      {/* Tabs */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="bg-white rounded-lg border border-gray-200"
-      >
-        <div className="flex border-b border-gray-200">
-          {[
-            { id: 'incidents', label: '📊 Live Incidents', count: filteredIncidents.length },
-            { id: 'scenarios', label: '🎬 Test Scenarios', count: scenarios?.length || 0 },
-            { id: 'decisions', label: '📋 Decisions', count: decisions.length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex-1 px-6 py-4 font-semibold border-b-2 transition-colors ${
-                activeTab === tab.id
-                  ? 'text-blue-600 border-blue-600 bg-blue-50'
-                  : 'text-gray-600 border-transparent hover:text-gray-900'
-              }`}
-            >
-              {tab.label} ({tab.count})
-            </button>
-          ))}
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <Eyebrow>Factory 001 · Live</Eyebrow>
+          <h1 className="text-[22px] font-bold text-ink tracking-[-0.02em] mt-1">Operations</h1>
+          <p className="text-[13px] text-dim mt-0.5">What needs your attention right now.</p>
         </div>
-
-        {/* Tab Content */}
-        <div className="p-6">
-          {/* Incidents Tab */}
-          {activeTab === 'incidents' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-4"
-            >
-              {eventsLoading ? (
-                <div className="text-center py-8 text-gray-500">
-                  Loading incidents...
-                </div>
-              ) : filteredIncidents.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  No active incidents. System is healthy.
-                </div>
-              ) : (
-                filteredIncidents.map((incident: any, i: number) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 hover:bg-blue-50 transition-colors cursor-pointer"
-                    onClick={() => setActiveDecision(decisions[i])}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-gray-900">{incident.event_type}</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Signal: {incident.signal_name} = {incident.signal_value}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-2">
-                          {new Date(incident.timestamp).toLocaleTimeString()}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-semibold text-gray-900">
-                          {(incident.confidence * 100).toFixed(0)}% confidence
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Factory: {incident.factory_id}
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-            </motion.div>
-          )}
-
-          {/* Scenarios Tab */}
-          {activeTab === 'scenarios' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-4"
-            >
-              {scenariosLoading ? (
-                <div className="text-center py-8 text-gray-500">Loading scenarios...</div>
-              ) : (
-                (scenarios || []).map((scenario: any) => (
-                  <motion.div
-                    key={scenario.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="border border-gray-200 rounded-lg p-4"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-gray-900">{scenario.name}</h4>
-                        <p className="text-sm text-gray-600 mt-1">{scenario.description}</p>
-                        <div className="flex gap-4 mt-3 text-xs text-gray-500">
-                          <span>
-                            Difficulty:{' '}
-                            <span className="font-semibold">{scenario.difficulty}</span>
-                          </span>
-                          <span>
-                            Events: <span className="font-semibold">{scenario.event_count}</span>
-                          </span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleGenerateScenario(scenario.id)}
-                        disabled={runningScenarioId === scenario.id}
-                        className={`px-4 py-2 rounded font-semibold transition-colors ${
-                          runningScenarioId === scenario.id
-                            ? 'bg-gray-300 text-gray-600'
-                            : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
-                      >
-                        {runningScenarioId === scenario.id ? '▶ Running...' : '▶ Run Test'}
-                      </button>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-              {runError && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-                  Error: {runError}
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Decisions Tab */}
-          {activeTab === 'decisions' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-4"
-            >
-              {decisions.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  Run a scenario to generate decisions
-                </div>
-              ) : (
-                decisions.map((decision: any, i: number) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                      activeDecision?.decision_id === decision.decision_id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                    onClick={() => setActiveDecision(decision)}
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-gray-900">
-                          {decision.orchestration_result?.selected_action || 'Pending'}
-                        </h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          Decision ID: {decision.decision_id.slice(0, 16)}...
-                        </p>
-                        <div className="flex gap-4 mt-2 text-xs">
-                          <span className="px-2 py-1 bg-gray-100 rounded">
-                            {decision.analysis_layers?.agent_analyses?.length || 0} agents
-                          </span>
-                          <span className="px-2 py-1 bg-gray-100 rounded">
-                            Approval:{' '}
-                            {decision.orchestration_result?.approval_required
-                              ? 'Required'
-                              : 'Auto'}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-right text-xs text-gray-500">
-                        {new Date(decision.timestamp).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))
-              )}
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Decision Detail Panel */}
-      {activeDecision && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-lg border border-gray-200 p-8"
+        <button
+          onClick={() => queryClient.invalidateQueries()}
+          className="btn-ghost flex items-center gap-1.5 px-3 py-1.5 text-[13px]"
         >
-          <div className="flex justify-between items-start mb-6">
-            <h2 className="text-2xl font-bold">Decision Details</h2>
-            <button
-              onClick={() => setActiveDecision(null)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh
+        </button>
+      </div>
 
-          <div className="grid grid-cols-2 gap-6 mb-6">
-            <div>
-              <div className="text-sm text-gray-600 mb-1">Decision ID</div>
-              <div className="font-mono text-sm">{activeDecision.decision_id}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-600 mb-1">Selected Action</div>
-              <div className="font-bold text-lg">
-                {activeDecision.orchestration_result?.selected_action || 'None'}
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiTile label="Active incidents" value={incidents.length} tone={incidents.length ? 'warn' : 'ok'} meaning={incidents.length ? 'Streaming from the floor' : 'Floor is quiet'} />
+        <KpiTile label="Needs approval" value={pending.length} tone={pending.length ? 'bad' : 'ok'} meaning={pending.length ? 'Waiting on you' : 'Nothing pending'} />
+        <KpiTile label="Approval rate" value={analyticsData ? `${analyticsData.approval_rate}%` : '—'} meaning="Target ≥ 85%" />
+        <KpiTile label="Avg response" value={analyticsData ? `${(analyticsData.avg_latency_ms / 1000).toFixed(1)}s` : '—'} meaning="Per decision" />
+      </div>
+
+      <div className="flex gap-6">
+        <div className="flex-1 min-w-0 space-y-7">
+          {/* HERO — Needs your approval */}
+          <section>
+            <SectionHeader
+              eyebrow="Needs your approval"
+              title="Decisions"
+              accent="waiting on you"
+              sub="Each is an incident the agents diagnosed and turned into a recommended action."
+              right={pending.length > 0 ? <SignalPill tone="warn">{pending.length} pending</SignalPill> : undefined}
+            />
+            {decisionsLoading ? (
+              <div className="space-y-2">{Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-28 bg-card border border-line rounded-card animate-pulse" />)}</div>
+            ) : pending.length === 0 ? (
+              <AlertBar tone="ok" title="All clear — nothing needs your approval">
+                When an incident produces a recommended action, it will appear here for you to approve.
+              </AlertBar>
+            ) : (
+              <div className="space-y-3">
+                {pending.map((d) => (
+                  <DecisionCard
+                    key={d.decision_id} d={d} incident={incidentFor(d)} pending busy={approvingId === d.decision_id}
+                    onApprove={(e) => handleApproval(d.decision_id, 'approve', e)}
+                    onReject={(e) => handleApproval(d.decision_id, 'reject', e)}
+                  />
+                ))}
               </div>
-            </div>
-          </div>
+            )}
+          </section>
 
-          <div className="space-y-6">
-            <div>
-              <h3 className="font-bold text-lg mb-3">Agent Analyses</h3>
-              <div className="space-y-2">
-                {activeDecision.analysis_layers?.agent_analyses?.map(
-                  (analysis: any, i: number) => (
-                    <div
-                      key={i}
-                      className="bg-gray-50 rounded p-3 border border-gray-200"
-                    >
-                      <div className="font-semibold text-gray-900">{analysis.agent}</div>
-                      {analysis.error ? (
-                        <div className="text-red-600 text-sm mt-1">Error: {analysis.error}</div>
-                      ) : (
-                        <>
-                          <div className="text-sm text-gray-600 mt-1">
-                            Confidence: {(analysis.confidence * 100).toFixed(0)}%
-                          </div>
-                          {analysis.recommendations?.length > 0 && (
-                            <div className="text-sm text-gray-700 mt-2">
-                              Recommendations: {analysis.recommendations.length}
-                            </div>
-                          )}
-                        </>
-                      )}
+          {/* Live incidents */}
+          <section>
+            <SectionHeader
+              eyebrow="Live incidents"
+              title="What's happening"
+              accent="on the floor"
+              sub="Signals streaming in from machine monitors."
+            />
+            {eventsLoading ? (
+              <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-14 bg-card border border-line rounded-card animate-pulse" />)}</div>
+            ) : incidents.length === 0 ? (
+              <AlertBar tone="ok" title="All systems healthy — no active incidents" />
+            ) : (
+              <Card className="divide-y divide-line overflow-hidden">
+                {incidents.slice(0, 12).map((e: any, i: number) => {
+                  const tone = eventTone(e.event_type);
+                  return (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-ok transition-colors">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass[tone]}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-semibold text-ink truncate">{plainSignal(e.signal_name)}</p>
+                        <p className="text-[11px] text-dim truncate">{e.machine_id ? plainMachine(e.machine_id) : '—'} · {timeAgo(e.created_at || e.timestamp)}</p>
+                      </div>
+                      <span className="font-mono text-[11px] text-dim shrink-0">{((e.confidence || 0) * 100).toFixed(0)}%</span>
+                      <SignalPill tone={tone}>{e.event_type}</SignalPill>
                     </div>
-                  )
-                ) || []}
-              </div>
-            </div>
+                  );
+                })}
+              </Card>
+            )}
+          </section>
 
-            <div>
-              <h3 className="font-bold text-lg mb-3">Approval Status</h3>
-              <div className="bg-blue-50 rounded p-4 border border-blue-200">
-                <div className="text-sm text-gray-600 mb-1">Approval Required</div>
-                <div className="font-bold text-lg">
-                  {activeDecision.orchestration_result?.approval_required
-                    ? `Yes - ${activeDecision.orchestration_result.approval_route}`
-                    : 'No - Auto Approved'}
-                </div>
+          {/* Recent decisions */}
+          {resolved.length > 0 && (
+            <section>
+              <SectionHeader eyebrow="Resolved" title="Recent" accent="decisions" sub="Already approved, rejected, or executed." />
+              <div className="space-y-2">
+                {resolved.slice(0, 8).map((d) => (
+                  <DecisionCard key={d.decision_id} d={d} incident={incidentFor(d)} pending={false} busy={false} onApprove={() => {}} onReject={() => {}} />
+                ))}
               </div>
-            </div>
+            </section>
+          )}
+        </div>
+
+        {/* Right rail — slim live monitors */}
+        <aside className="w-56 shrink-0 hidden lg:block">
+          <div className="sticky top-0">
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <Eyebrow>Monitors</Eyebrow>
+                <SignalPill tone="ok">All live</SignalPill>
+              </div>
+              <div className="space-y-2.5">
+                {MONITORS.map((m) => (
+                  <div key={m} className="flex items-center gap-2.5">
+                    <span className="relative flex w-1.5 h-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pine-2 opacity-50" />
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-pine-2" />
+                    </span>
+                    <span className="text-[13px] text-ink">{m}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
           </div>
-        </motion.div>
-      )}
+        </aside>
+      </div>
     </div>
   );
 }

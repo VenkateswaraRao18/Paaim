@@ -12,6 +12,7 @@ from paaim.connectors.base import (
 )
 from paaim.connectors.mes import MESConnector
 from paaim.connectors.cmms import CMMSConnector
+from paaim.connectors.erp import ERPConnector
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,8 @@ class ConnectorManager:
             self.connectors[name] = MESConnector(config)
         elif connector_type == "cmms":
             self.connectors[name] = CMMSConnector(config)
+        elif connector_type == "erp":
+            self.connectors[name] = ERPConnector(name, config)
         else:
             raise ValueError(f"Unknown connector type: {connector_type}")
 

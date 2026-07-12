@@ -33,6 +33,10 @@ class RuleOperator(str, Enum):
     NOT_IN = "not_in"
     CONTAINS = "contains"
     MATCHES_REGEX = "matches_regex"
+    # Baseline-relative — compare against THIS machine's learned normal (SPC).
+    # `value` is an optional sigma multiplier; falls back to the learned normal_range.
+    OUTSIDE_NORMAL = "outside_normal"   # below OR above the learned band
+    ABOVE_NORMAL = "above_normal"       # above the learned band only
 
 
 @dataclass
@@ -84,18 +88,42 @@ class Rule:
 
 @dataclass
 class CustomAgentDefinition:
-    """Complete definition for custom agent."""
+    """Complete definition for custom agent.
+
+    Modern model: an agent WATCHES canonical signals across a SCOPE (all machines,
+    a set of machines, or a zone) — it is machine-agnostic and covers the whole
+    fleet by default. `data_sources` is retained for backward compatibility with
+    the older source-bound agents.
+    """
     id: str
     name: str
     description: str
     domain: str  # e.g., "thermal", "vibration", "pressure"
-    data_sources: List[DataSource]
-    rules: List[Rule]
-    actions: List[str]  # Possible actions agent can recommend
+    data_sources: List[DataSource] = field(default_factory=list)
+    rules: List[Rule] = field(default_factory=list)
+    actions: List[str] = field(default_factory=list)  # Possible actions agent can recommend
+    watch_signals: List[str] = field(default_factory=list)   # canonical signals this agent watches
+    scope: Dict[str, Any] = field(default_factory=lambda: {"type": "all"})  # all | machines | zone
     enabled: bool = True
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
     created_by: Optional[str] = None
+
+    # ── Fleet-wide dispatch helpers ─────────────────────────────────────────
+    def watches(self, signal_name: str) -> bool:
+        """True if this agent watches the given canonical signal."""
+        return bool(self.watch_signals) and signal_name in self.watch_signals
+
+    def covers(self, machine_id: str, machine_zone: Optional[str] = None) -> bool:
+        """True if the agent's scope includes this machine."""
+        t = (self.scope or {}).get("type", "all")
+        if t == "all":
+            return True
+        if t == "machines":
+            return machine_id in (self.scope.get("machines") or [])
+        if t == "zone":
+            return machine_zone is not None and machine_zone == self.scope.get("zone")
+        return True
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -107,6 +135,8 @@ class CustomAgentDefinition:
             "data_sources": [ds.to_dict() for ds in self.data_sources],
             "rules": [r.to_dict() for r in self.rules],
             "actions": self.actions,
+            "watch_signals": self.watch_signals,
+            "scope": self.scope,
             "enabled": self.enabled,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -148,7 +178,9 @@ class CustomAgentDefinition:
             domain=data["domain"],
             data_sources=data_sources,
             rules=rules,
-            actions=data["actions"],
+            actions=data.get("actions", []),
+            watch_signals=data.get("watch_signals", []),
+            scope=data.get("scope") or {"type": "all"},
             enabled=data.get("enabled", True),
             created_by=data.get("created_by"),
         )
@@ -229,8 +261,40 @@ class CustomAgentExecutor:
         elif rule.operator == RuleOperator.MATCHES_REGEX:
             import re
             return bool(re.search(rule.value, str(field_value)))
+        elif rule.operator in (RuleOperator.OUTSIDE_NORMAL, RuleOperator.ABOVE_NORMAL):
+            return self._baseline_breach(rule, field_value, data.get("__baseline__"))
 
         return False
+
+    @staticmethod
+    def _baseline_breach(rule: "Rule", value: Any, baseline: Optional[Dict[str, Any]]) -> bool:
+        """Compare a reading against the machine's LEARNED normal (SPC control band)."""
+        if not baseline:
+            return False  # no learned history yet → can't judge
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return False
+        low = high = None
+        # optional sigma multiplier (rule.value) → mean ± kσ
+        if rule.value not in (None, ""):
+            try:
+                k = float(rule.value)
+                mean = baseline.get("mean")
+                std = baseline.get("std", 0) or 0
+                if mean is not None:
+                    low, high = mean - k * std, mean + k * std
+            except (TypeError, ValueError):
+                pass
+        if low is None:  # fall back to the learned normal_range (mean ± 2σ)
+            nr = baseline.get("normal_range")
+            if nr and len(nr) == 2:
+                low, high = nr[0], nr[1]
+        if low is None:
+            return False
+        if rule.operator == RuleOperator.ABOVE_NORMAL:
+            return v > high
+        return v < low or v > high
 
     async def execute(self, external_data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
@@ -261,7 +325,7 @@ class CustomAgentExecutor:
                     "action_name": rule.action,
                     "confidence": rule.confidence,
                     "evidence_signals": [f"{rule.field}={data.get(rule.field)}"],
-                    "risk_level": "MEDIUM",
+                    "risk_level": "medium",
                     "reasoning": f"Rule matched: {rule.field} {rule.operator.value} {rule.value}",
                 }
                 recommendations.append(recommendation)
@@ -270,20 +334,51 @@ class CustomAgentExecutor:
         return recommendations
 
 
+AGENTS_PERSIST_PATH = "custom_agents.json"
+
+
 class CustomAgentRegistry:
     """Registry for managing custom agents."""
 
-    def __init__(self):
+    def __init__(self, persist_path: str = AGENTS_PERSIST_PATH):
         """Initialize registry."""
         self.agents: Dict[str, CustomAgentDefinition] = {}
         self.executors: Dict[str, CustomAgentExecutor] = {}
         self.logger = logging.getLogger(__name__)
+        self.persist_path = persist_path
+        self._load_from_disk()
+
+    def _load_from_disk(self) -> None:
+        """Load persisted agents from disk on startup."""
+        try:
+            with open(self.persist_path, "r") as f:
+                data = json.load(f)
+            for agent_data in data.values():
+                definition = CustomAgentDefinition.from_dict(agent_data)
+                self.agents[definition.id] = definition
+                if definition.enabled:
+                    self.executors[definition.id] = CustomAgentExecutor(definition)
+            self.logger.info(f"Loaded {len(self.agents)} custom agents from disk")
+        except FileNotFoundError:
+            pass  # First run, no agents yet
+        except Exception as e:
+            self.logger.warning(f"Could not load agents from disk: {e}")
+
+    def _save_to_disk(self) -> None:
+        """Persist current agents to disk."""
+        try:
+            data = {agent_id: agent.to_dict() for agent_id, agent in self.agents.items()}
+            with open(self.persist_path, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            self.logger.error(f"Could not save agents to disk: {e}")
 
     def register_agent(self, definition: CustomAgentDefinition) -> None:
         """Register custom agent."""
         self.agents[definition.id] = definition
         if definition.enabled:
             self.executors[definition.id] = CustomAgentExecutor(definition)
+        self._save_to_disk()
         self.logger.info(f"Registered custom agent: {definition.name} ({definition.id})")
 
     def unregister_agent(self, agent_id: str) -> None:
@@ -292,6 +387,7 @@ class CustomAgentRegistry:
             del self.agents[agent_id]
         if agent_id in self.executors:
             del self.executors[agent_id]
+        self._save_to_disk()
         self.logger.info(f"Unregistered custom agent: {agent_id}")
 
     def enable_agent(self, agent_id: str) -> None:
@@ -299,6 +395,7 @@ class CustomAgentRegistry:
         if agent_id in self.agents:
             self.agents[agent_id].enabled = True
             self.executors[agent_id] = CustomAgentExecutor(self.agents[agent_id])
+            self._save_to_disk()
             self.logger.info(f"Enabled agent: {agent_id}")
 
     def disable_agent(self, agent_id: str) -> None:
@@ -307,6 +404,7 @@ class CustomAgentRegistry:
             self.agents[agent_id].enabled = False
             if agent_id in self.executors:
                 del self.executors[agent_id]
+            self._save_to_disk()
             self.logger.info(f"Disabled agent: {agent_id}")
 
     def get_agent(self, agent_id: str) -> Optional[CustomAgentDefinition]:
@@ -348,6 +446,37 @@ class CustomAgentRegistry:
 
         executor = self.executors[agent_id]
         return await executor.execute(data)
+
+    async def evaluate_signal_event(
+        self,
+        signal_name: str,
+        value: float,
+        machine_id: str,
+        machine_zone: Optional[str] = None,
+        baseline: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Fleet-wide dispatch: run EVERY custom agent that watches this signal and
+        whose scope covers this machine. One agent naturally handles many machines —
+        the recommendation is tagged with the machine that triggered it.
+
+        If a learned `baseline` is supplied, rules using OUTSIDE_NORMAL/ABOVE_NORMAL
+        judge the reading against THIS machine's learned normal (SPC), not a static
+        threshold.
+        """
+        recs: List[Dict[str, Any]] = []
+        data = {signal_name: value, "value": value}
+        if baseline:
+            data["__baseline__"] = baseline
+        for agent_id, agent in self.agents.items():
+            if not agent.enabled or not agent.watches(signal_name):
+                continue
+            if not agent.covers(machine_id, machine_zone):
+                continue
+            for r in await self.execute_agent_async(agent_id, data):
+                r["machine_id"] = machine_id
+                r["signal_name"] = signal_name
+                recs.append(r)
+        return recs
 
     def save_agents(self, filepath: str) -> None:
         """Save agents to JSON file."""
@@ -581,6 +710,46 @@ class RESTAPIConnector(DataSourceConnector):
         return (connected, "REST API connection OK" if connected else "REST API connection failed")
 
 
+class DatabaseConnector(DataSourceConnector):
+    """SQL database connector (PostgreSQL, MySQL, SQLite)."""
+
+    async def connect(self) -> bool:
+        try:
+            conn_str = self.config.get("connection_string", "")
+            if not conn_str:
+                self.logger.error("No connection_string provided")
+                return False
+            from sqlalchemy import create_engine, text
+            engine = create_engine(conn_str, pool_timeout=5, connect_args={"connect_timeout": 5} if "postgresql" in conn_str or "mysql" in conn_str else {})
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            self.logger.error(f"Database connection failed: {e}")
+            return False
+
+    async def disconnect(self) -> None:
+        self.logger.info("Database connector closed")
+
+    async def fetch_data(self, query: Optional[str] = None) -> Dict[str, Any]:
+        try:
+            conn_str = self.config.get("connection_string", "")
+            sql = query or self.config.get("query", "SELECT 1")
+            from sqlalchemy import create_engine, text
+            engine = create_engine(conn_str)
+            with engine.connect() as conn:
+                result = conn.execute(text(sql))
+                rows = [dict(row._mapping) for row in result]
+            return {"rows": rows, "count": len(rows)}
+        except Exception as e:
+            self.logger.error(f"Database fetch failed: {e}")
+            return {}
+
+    async def test_connection(self) -> Tuple[bool, str]:
+        connected = await self.connect()
+        return (connected, "Database connection OK" if connected else "Database connection failed — check connection string")
+
+
 def get_connector_for_source(data_source: DataSource) -> Optional[DataSourceConnector]:
     """Factory method to get appropriate connector for data source."""
     if data_source.type == DataSourceType.SCADA:
@@ -591,6 +760,8 @@ def get_connector_for_source(data_source: DataSource) -> Optional[DataSourceConn
         return IoTConnector(data_source.config)
     elif data_source.type == DataSourceType.REST_API:
         return RESTAPIConnector(data_source.config)
+    elif data_source.type == DataSourceType.DATABASE:
+        return DatabaseConnector(data_source.config)
     return None
 
 

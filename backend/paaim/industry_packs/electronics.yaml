@@ -1,0 +1,122 @@
+# PAAIM Industry Pack — Electronics / PCB Manufacturing
+# EMS / contract electronics profile
+# Target: High-mix, high-volume SMT lines, IPC-A-610 compliance
+
+pack_id: electronics
+version: "1.0"
+display_name: Electronics Manufacturing
+description: >
+  Electronics Manufacturing Services (EMS) profile for SMT/PCB assembly.
+  Covers IPC-A-610 quality, ESD safety, yield management, and traceability
+  requirements common in consumer and industrial electronics.
+
+costs:
+  downtime_cost_per_hour_usd: 4500
+  scrap_cost_per_unit_usd: 15          # PCBs vary widely — this is a mid-range average
+  rework_cost_per_unit_usd: 8
+  late_delivery_penalty_per_day_usd: 2000
+  labor_cost_per_hour_usd: 65
+  planned_maintenance_cost_per_hour_usd: 180
+  unplanned_failure_multiplier: 4.5
+  overtime_rate_multiplier: 1.5
+
+approval_matrix:
+  stop_line:               safety_officer
+  acknowledge_estop:       auto
+  contain_batch:           supervisor
+  inspect_root_cause:      operator
+  schedule_maintenance:    operator
+  escalate_critical:       plant_manager
+  propose_recovery_plan:   supervisor
+  adjust_schedule:         operator
+  shift_non_critical_load: operator
+  reduce_consumption:      auto
+
+defect_taxonomy:
+  - type: solder_bridge
+    severity: major
+    disposition: rework
+    ipc_class: class_2
+    customer_notification: false
+  - type: open_solder_joint
+    severity: major
+    disposition: rework
+    ipc_class: class_2
+    customer_notification: false
+  - type: missing_component
+    severity: critical
+    disposition: rework
+    ipc_class: class_2
+    customer_notification: true
+  - type: wrong_component
+    severity: critical
+    disposition: scrap
+    ipc_class: class_2
+    customer_notification: true
+  - type: pcb_delamination
+    severity: critical
+    disposition: scrap
+    ipc_class: class_2
+    customer_notification: true
+  - type: tombstoning
+    severity: major
+    disposition: rework
+    ipc_class: class_2
+    customer_notification: false
+  - type: esd_damage
+    severity: critical
+    disposition: scrap
+    ipc_class: class_2
+    customer_notification: true
+
+kpi_targets:
+  oee: 82
+  availability: 92
+  quality_rate: 99.2
+  scrap_rate: 0.5
+  mtbf_hours: 500
+  mttr_hours: 2.0
+  pm_compliance: 93
+  throughput_units_per_shift: 5000    # high-volume SMT
+
+agents:
+  safety_agent:
+    enabled: true
+    esd_zone_monitoring: true
+    escalation_threshold: 0.90
+  quality_agent:
+    enabled: true
+    aoi_integration: true             # Automated Optical Inspection
+    defect_rate_trigger: 1.0
+    first_pass_yield_target: 98.5
+  maintenance_agent:
+    enabled: true
+    stencil_inspection_interval_hours: 4
+    pick_and_place_nozzle_check_count: 50000
+  production_agent:
+    enabled: true
+    changeover_time_minutes: 30
+  energy_agent:
+    enabled: true
+    reflow_oven_monitoring: true
+
+model_router:
+  rules: rules_engine_v1
+  fast: gemini-2.0-flash
+  smart: gemini-1.5-pro
+  best: claude-sonnet-4-6
+
+compliance:
+  - IPC-A-610 Class 2/3
+  - J-STD-001
+  - ISO 9001:2015
+  - RoHS / WEEE
+  - ESD: ANSI/ESD S20.20
+
+shifts:
+  - name: Day
+    start: "07:00"
+    end: "15:00"
+  - name: Evening
+    start: "15:00"
+    end: "23:00"

@@ -3,11 +3,13 @@ from datetime import datetime
 from enum import Enum
 import json
 
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
 from paaim.models import AuditLogModel
 
 
 class AuditEventType(str, Enum):
-    """Types of audit events."""
     EVENT_DETECTED = "event_detected"
     AGENT_ANALYZED = "agent_analyzed"
     POLICY_EVALUATED = "policy_evaluated"
@@ -21,11 +23,7 @@ class AuditEventType(str, Enum):
 
 
 class EvidencePack:
-    """
-    Complete evidence trail for a decision.
-
-    Captures all information needed to understand, audit, and replay a decision.
-    """
+    """Complete evidence trail for a single decision."""
 
     def __init__(self, decision_id: str, event_id: str, factory_id: str):
         self.decision_id = decision_id
@@ -42,7 +40,6 @@ class EvidencePack:
         details: Dict[str, Any],
         timestamp: Optional[datetime] = None,
     ):
-        """Add an event to the evidence trail."""
         self.events.append({
             "event_type": event_type.value,
             "actor": actor,
@@ -51,11 +48,9 @@ class EvidencePack:
         })
 
     def set_metadata(self, key: str, value: Any):
-        """Set metadata key-value pair."""
         self.metadata[key] = value
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for storage."""
         return {
             "decision_id": self.decision_id,
             "event_id": self.event_id,
@@ -66,168 +61,68 @@ class EvidencePack:
         }
 
     def to_json(self) -> str:
-        """Convert to JSON string."""
         return json.dumps(self.to_dict(), indent=2)
 
 
 class AuditLogger:
-    """
-    Central audit logging system.
-
-    Logs all decision-related events and stores complete evidence packs
-    for compliance, debugging, and replay.
-    """
+    """In-memory audit logger for a single decision flow."""
 
     def __init__(self):
         self.current_pack: Optional[EvidencePack] = None
 
     def start_decision(self, decision_id: str, event_id: str, factory_id: str):
-        """Start logging a new decision."""
         self.current_pack = EvidencePack(decision_id, event_id, factory_id)
 
-    def log_event(
-        self,
-        event_type: AuditEventType,
-        actor: str,
-        details: Dict[str, Any],
-    ):
-        """Log an audit event."""
+    def log_event(self, event_type: AuditEventType, actor: str, details: Dict[str, Any]):
         if not self.current_pack:
             raise RuntimeError("No decision in progress")
         self.current_pack.add_event(event_type, actor, details)
 
-    def log_agent_analysis(
-        self,
-        agent_name: str,
-        analysis: Dict[str, Any],
-    ):
-        """Log agent analysis."""
-        self.log_event(
-            AuditEventType.AGENT_ANALYZED,
-            agent_name,
-            {
-                "recommendations": analysis.get("recommendations", []),
-                "confidence": analysis.get("confidence"),
-                "reasoning": analysis.get("reasoning"),
-            },
-        )
+    def log_agent_analysis(self, agent_name: str, analysis: Dict[str, Any]):
+        self.log_event(AuditEventType.AGENT_ANALYZED, agent_name, {
+            "recommendations": analysis.get("recommendations", []),
+            "confidence": analysis.get("confidence"),
+            "reasoning": analysis.get("reasoning"),
+        })
 
-    def log_policy_check(
-        self,
-        action_name: str,
-        policy_result: Dict[str, Any],
-    ):
-        """Log policy evaluation."""
-        self.log_event(
-            AuditEventType.POLICY_EVALUATED,
-            "PolicyEngine",
-            {
-                "action": action_name,
-                "decision": policy_result.get("policy_decision"),
-                "approval_level": policy_result.get("approval_level"),
-                "reason": policy_result.get("reason"),
-            },
-        )
+    def log_policy_check(self, action_name: str, policy_result: Dict[str, Any]):
+        self.log_event(AuditEventType.POLICY_EVALUATED, "PolicyEngine", {
+            "action": action_name,
+            "decision": policy_result.get("policy_decision"),
+            "approval_level": policy_result.get("approval_level"),
+            "reason": policy_result.get("reason"),
+        })
 
-    def log_impact_simulation(
-        self,
-        action_name: str,
-        impact: Dict[str, Any],
-    ):
-        """Log Decision Twin impact estimation."""
-        self.log_event(
-            AuditEventType.IMPACT_SIMULATED,
-            "DecisionTwin",
-            {
-                "action": action_name,
-                "downtime_hours": impact.get("downtime_hours"),
-                "scrap_units": impact.get("scrap_units"),
-                "cost_impact": impact.get("cost_impact"),
-                "impact_score": impact.get("impact_score"),
-            },
-        )
+    def log_impact_simulation(self, action_name: str, impact: Dict[str, Any]):
+        self.log_event(AuditEventType.IMPACT_SIMULATED, "DecisionTwin", {
+            "action": action_name,
+            "downtime_hours": impact.get("downtime_hours"),
+            "cost_impact": impact.get("cost_impact"),
+            "impact_score": impact.get("impact_score"),
+        })
 
-    def log_red_team_review(
-        self,
-        action_name: str,
-        review: Dict[str, Any],
-    ):
-        """Log red-team challenge."""
-        self.log_event(
-            AuditEventType.RED_TEAM_CHALLENGED,
-            "RedTeamAgent",
-            {
-                "action": action_name,
-                "risk_factors": review.get("risk_factors", []),
-                "assumptions_challenged": review.get("assumptions_challenged", []),
-                "overall_risk_assessment": review.get("overall_risk_assessment"),
-            },
-        )
+    def log_red_team_review(self, action_name: str, review: Dict[str, Any]):
+        self.log_event(AuditEventType.RED_TEAM_CHALLENGED, "RedTeamAgent", {
+            "action": action_name,
+            "risk_factors": review.get("risk_factors", []),
+            "assumptions_challenged": review.get("assumptions_challenged", []),
+            "overall_risk_assessment": review.get("overall_risk_assessment"),
+        })
 
-    def log_approval_routing(
-        self,
-        action_name: str,
-        routing: Dict[str, Any],
-    ):
-        """Log approval gate routing."""
-        self.log_event(
-            AuditEventType.APPROVAL_ROUTED,
-            "ApprovalGate",
-            {
-                "action": action_name,
-                "approver_roles": routing.get("approver_roles", []),
-                "approval_deadline_seconds": routing.get("approval_deadline_seconds"),
-            },
-        )
+    def log_approval_routing(self, action_name: str, routing: Dict[str, Any]):
+        self.log_event(AuditEventType.APPROVAL_ROUTED, "ApprovalGate", {
+            "action": action_name,
+            "approver_roles": routing.get("approver_roles", []),
+        })
 
-    def log_approval(
-        self,
-        approved: bool,
-        approver_role: str,
-        approver_id: str,
-        notes: Optional[str] = None,
-    ):
-        """Log approval decision."""
+    def log_approval(self, approved: bool, approver_role: str, approver_id: str, notes: Optional[str] = None):
         event_type = AuditEventType.DECISION_APPROVED if approved else AuditEventType.DECISION_REJECTED
-        self.log_event(
-            event_type,
-            f"{approver_role}:{approver_id}",
-            {
-                "status": "approved" if approved else "rejected",
-                "notes": notes,
-            },
-        )
-
-    def log_execution(
-        self,
-        action_name: str,
-        success: bool,
-        details: Optional[Dict[str, Any]] = None,
-    ):
-        """Log action execution."""
-        self.log_event(
-            AuditEventType.ACTION_EXECUTED,
-            "System",
-            {
-                "action": action_name,
-                "success": success,
-                "details": details or {},
-            },
-        )
-
-    def log_outcome(
-        self,
-        outcome_data: Dict[str, Any],
-    ):
-        """Log final decision outcome."""
-        self.log_event(
-            AuditEventType.OUTCOME_RECORDED,
-            "System",
-            outcome_data,
-        )
+        self.log_event(event_type, f"{approver_role}:{approver_id}", {
+            "status": "approved" if approved else "rejected",
+            "notes": notes,
+        })
 
     def finish_decision(self) -> EvidencePack:
-        """Finish logging and return evidence pack."""
         if not self.current_pack:
             raise RuntimeError("No decision in progress")
         pack = self.current_pack
@@ -235,24 +130,16 @@ class AuditLogger:
         return pack
 
     def get_evidence_pack(self) -> Optional[EvidencePack]:
-        """Get current evidence pack (without finishing)."""
         return self.current_pack
 
 
 class AuditStore:
-    """
-    Persistent storage for audit logs and evidence packs.
-    """
+    """Async persistence for audit logs and evidence packs."""
 
-    def __init__(self, db_session):
-        self.db = db_session
+    def __init__(self, db: AsyncSession):
+        self.db = db
 
-    def store_evidence_pack(self, pack: EvidencePack) -> str:
-        """
-        Store evidence pack in database.
-
-        Returns audit log ID.
-        """
+    async def store_evidence_pack(self, pack: EvidencePack) -> str:
         audit_log = AuditLogModel(
             id=f"audit_{pack.decision_id}",
             decision_id=pack.decision_id,
@@ -262,30 +149,26 @@ class AuditStore:
             details=pack.to_dict(),
         )
         self.db.add(audit_log)
-        self.db.commit()
         return audit_log.id
 
-    def get_evidence_pack(self, decision_id: str) -> Optional[EvidencePack]:
-        """Retrieve evidence pack for a decision."""
-        record = self.db.query(AuditLogModel).filter(
-            (AuditLogModel.decision_id == decision_id)
-            & (AuditLogModel.event_type == "evidence_pack")
-        ).first()
-
+    async def get_evidence_pack(self, decision_id: str) -> Optional[EvidencePack]:
+        result = await self.db.execute(
+            select(AuditLogModel).where(
+                AuditLogModel.decision_id == decision_id,
+                AuditLogModel.event_type == "evidence_pack",
+            )
+        )
+        record = result.scalar_one_or_none()
         if not record:
             return None
 
         pack_data = record.details
-        pack = EvidencePack(
-            pack_data["decision_id"],
-            pack_data["event_id"],
-            pack_data["factory_id"],
-        )
+        pack = EvidencePack(pack_data["decision_id"], pack_data["event_id"], pack_data["factory_id"])
         pack.events = pack_data.get("events", [])
         pack.metadata = pack_data.get("metadata", {})
         return pack
 
-    def search_audit_logs(
+    async def search_audit_logs(
         self,
         factory_id: str,
         event_type: Optional[str] = None,
@@ -294,32 +177,24 @@ class AuditStore:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[List[Dict[str, Any]], int]:
-        """
-        Search audit logs with filters.
-
-        Returns (logs, total_count).
-        """
-        query = self.db.query(AuditLogModel).filter(
-            AuditLogModel.decision_id is not None
-        )
+        query = select(AuditLogModel).where(AuditLogModel.decision_id.isnot(None))
 
         if event_type:
-            query = query.filter(AuditLogModel.event_type == event_type)
-
+            query = query.where(AuditLogModel.event_type == event_type)
         if start_date:
-            query = query.filter(AuditLogModel.timestamp >= start_date)
-
+            query = query.where(AuditLogModel.timestamp >= start_date)
         if end_date:
-            query = query.filter(AuditLogModel.timestamp <= end_date)
+            query = query.where(AuditLogModel.timestamp <= end_date)
 
-        total = query.count()
-
-        logs = (
-            query.order_by(AuditLogModel.timestamp.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+        count_result = await self.db.execute(
+            select(AuditLogModel.id).where(AuditLogModel.decision_id.isnot(None))
         )
+        total = len(count_result.all())
+
+        paginated = await self.db.execute(
+            query.order_by(AuditLogModel.timestamp.desc()).offset(offset).limit(limit)
+        )
+        logs = paginated.scalars().all()
 
         return (
             [
@@ -337,12 +212,13 @@ class AuditStore:
             total,
         )
 
-    def get_decision_timeline(self, decision_id: str) -> List[Dict[str, Any]]:
-        """Get complete timeline of events for a decision."""
-        logs = self.db.query(AuditLogModel).filter(
-            AuditLogModel.decision_id == decision_id
-        ).order_by(AuditLogModel.timestamp).all()
-
+    async def get_decision_timeline(self, decision_id: str) -> List[Dict[str, Any]]:
+        result = await self.db.execute(
+            select(AuditLogModel)
+            .where(AuditLogModel.decision_id == decision_id)
+            .order_by(AuditLogModel.timestamp)
+        )
+        logs = result.scalars().all()
         return [
             {
                 "timestamp": log.timestamp.isoformat(),
@@ -354,51 +230,38 @@ class AuditStore:
             for log in logs
         ]
 
-    def generate_compliance_report(
+    async def generate_compliance_report(
         self,
         factory_id: str,
         start_date: datetime,
         end_date: datetime,
     ) -> Dict[str, Any]:
-        """Generate compliance report for date range."""
-        logs, total = self.search_audit_logs(
-            factory_id=factory_id,
-            start_date=start_date,
-            end_date=end_date,
-            limit=10000,
+        logs, total = await self.search_audit_logs(
+            factory_id=factory_id, start_date=start_date, end_date=end_date, limit=10000
         )
 
-        # Calculate statistics
-        event_type_counts = {}
+        event_type_counts: Dict[str, int] = {}
         approvals = {"approved": 0, "rejected": 0}
         actions_executed = 0
 
         for log in logs:
-            event_type = log["event_type"]
-            event_type_counts[event_type] = event_type_counts.get(event_type, 0) + 1
-
-            if event_type == "decision_approved":
+            et = log["event_type"]
+            event_type_counts[et] = event_type_counts.get(et, 0) + 1
+            if et == "decision_approved":
                 approvals["approved"] += 1
-            elif event_type == "decision_rejected":
+            elif et == "decision_rejected":
                 approvals["rejected"] += 1
-            elif event_type == "action_executed":
+            elif et == "action_executed":
                 actions_executed += 1
 
+        total_approvals = approvals["approved"] + approvals["rejected"]
         return {
             "report_date": datetime.utcnow().isoformat(),
             "factory_id": factory_id,
-            "period": {
-                "start": start_date.isoformat(),
-                "end": end_date.isoformat(),
-            },
+            "period": {"start": start_date.isoformat(), "end": end_date.isoformat()},
             "total_events": total,
             "event_type_counts": event_type_counts,
             "approvals": approvals,
             "actions_executed": actions_executed,
-            "approval_rate": (
-                approvals["approved"]
-                / (approvals["approved"] + approvals["rejected"])
-                if (approvals["approved"] + approvals["rejected"]) > 0
-                else 0
-            ),
+            "approval_rate": approvals["approved"] / total_approvals if total_approvals > 0 else 0,
         }

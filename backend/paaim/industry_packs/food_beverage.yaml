@@ -1,0 +1,137 @@
+# PAAIM Industry Pack — Food & Beverage Manufacturing
+# FDA 21 CFR Part 117 / FSMA / HACCP profile
+# Target: Continuous process lines, strict hygiene, cold chain compliance
+
+pack_id: food_beverage
+version: "1.0"
+display_name: Food & Beverage Manufacturing
+description: >
+  Food & Beverage manufacturing profile for continuous process lines.
+  HACCP-aligned decision logic with mandatory stop actions for critical
+  control points. Covers FDA FSMA, allergen control, and cold-chain integrity.
+
+costs:
+  downtime_cost_per_hour_usd: 3800
+  scrap_cost_per_unit_usd: 2.50        # per unit (case), highly product-dependent
+  rework_cost_per_unit_usd: 0          # food: no rework, scrap only for safety issues
+  late_delivery_penalty_per_day_usd: 1500
+  labor_cost_per_hour_usd: 55
+  planned_maintenance_cost_per_hour_usd: 160
+  unplanned_failure_multiplier: 5.0
+  overtime_rate_multiplier: 1.5
+  product_recall_cost_usd: 500000      # regulatory recall — catastrophic
+
+approval_matrix:
+  stop_line:               safety_officer   # CCP deviation = immediate stop
+  acknowledge_estop:       auto
+  contain_batch:           supervisor        # always contain on quality signal
+  inspect_root_cause:      operator
+  schedule_maintenance:    operator
+  escalate_critical:       plant_manager
+  propose_recovery_plan:   supervisor
+  adjust_schedule:         supervisor
+  shift_non_critical_load: operator
+  reduce_consumption:      operator
+  initiate_product_hold:   supervisor        # food-specific action
+  notify_food_safety_team: auto              # always auto-notify on CCP breach
+
+defect_taxonomy:
+  - type: foreign_object_contamination
+    severity: critical
+    disposition: scrap_and_investigate
+    haccp_ccp: true
+    regulatory_report: true
+    customer_notification: true
+  - type: allergen_cross_contamination
+    severity: critical
+    disposition: scrap_and_investigate
+    haccp_ccp: true
+    regulatory_report: true
+    customer_notification: true
+  - type: temperature_deviation
+    severity: major
+    disposition: hold_for_review
+    haccp_ccp: true
+    regulatory_report: false
+    customer_notification: false
+  - type: fill_weight_deviation
+    severity: minor
+    disposition: adjust_and_continue
+    haccp_ccp: false
+    regulatory_report: false
+    customer_notification: false
+  - type: seal_integrity_failure
+    severity: major
+    disposition: scrap
+    haccp_ccp: true
+    regulatory_report: false
+    customer_notification: true
+  - type: label_error
+    severity: major
+    disposition: rework_label
+    haccp_ccp: false
+    regulatory_report: true   # incorrect allergen labelling = reportable
+    customer_notification: true
+  - type: microbial_count_exceeded
+    severity: critical
+    disposition: scrap_and_investigate
+    haccp_ccp: true
+    regulatory_report: true
+    customer_notification: true
+
+kpi_targets:
+  oee: 78                   # food lines: changeovers and CIP reduce OEE
+  availability: 88
+  quality_rate: 99.0
+  scrap_rate: 0.8           # higher scrap tolerance vs automotive
+  mtbf_hours: 400
+  mttr_hours: 2.5
+  pm_compliance: 95         # hygiene: PM compliance is critical
+  throughput_units_per_shift: 8000
+
+agents:
+  safety_agent:
+    enabled: true
+    ccp_monitoring: true              # critical control point integration
+    escalation_threshold: 0.80       # food safety: escalate sooner
+    auto_stop_on_ccp_breach: true
+  quality_agent:
+    enabled: true
+    defect_rate_trigger: 0.5         # tighter trigger for food
+    metal_detector_integration: true
+    vision_inspection: true
+  maintenance_agent:
+    enabled: true
+    cip_schedule_monitoring: true    # Clean-in-Place monitoring
+    vibration_sigma_trigger: 3.0
+  production_agent:
+    enabled: true
+    shelf_life_buffer_days: 3        # flag if production will miss shelf-life
+  energy_agent:
+    enabled: true
+    refrigeration_monitoring: true   # cold chain priority
+
+model_router:
+  rules: rules_engine_v1
+  fast: gemini-2.0-flash
+  smart: gemini-1.5-pro
+  best: claude-sonnet-4-6           # CCP breaches: use best model
+
+compliance:
+  - FDA 21 CFR Part 117 (FSMA)
+  - HACCP (Codex Alimentarius)
+  - SQF Code Edition 9
+  - BRC Global Standard Food Safety
+  - ISO 22000
+  - FSSC 22000
+
+shifts:
+  - name: Day
+    start: "06:00"
+    end: "14:00"
+  - name: Afternoon
+    start: "14:00"
+    end: "22:00"
+  - name: Night
+    start: "22:00"
+    end: "06:00"

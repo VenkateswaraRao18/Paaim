@@ -1,46 +1,116 @@
-import os
-from dotenv import load_dotenv
+from typing import List
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv()
 
-class Settings:
-    """Application settings from environment variables."""
-
-    # Database
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        "postgresql://paaim:paaim_dev@localhost:5432/paaim_db"
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
     )
 
-    # Redis
-    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    # ── Core ───────────────────────────────────────────────────────────────
+    ENVIRONMENT: str = "development"
+    DEBUG: bool = False
+    SECRET_KEY: str = "change-me-in-production-use-a-real-secret"
 
-    # API
+    # ── API metadata ───────────────────────────────────────────────────────
     API_TITLE: str = "PAAIM API"
-    API_VERSION: str = "0.1.0"
+    API_VERSION: str = "1.0.0"
     API_DESCRIPTION: str = "Policy-Aware Agentic Intelligence Manager for Manufacturing"
 
-    # Anthropic
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # ── Database ───────────────────────────────────────────────────────────
+    DATABASE_URL: str = "sqlite+aiosqlite:///./paaim_dev.db"
+    DATABASE_URL_SYNC: str = "sqlite:///./paaim_dev.db"
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT: int = 30
+    DB_ECHO: bool = False
 
-    # App environment
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    DEBUG: bool = ENVIRONMENT == "development"
+    # ── Redis ──────────────────────────────────────────────────────────────
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_DECISION_CACHE_TTL: int = 3600
 
-    # Logging
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+    # ── AI — Google Gemini ─────────────────────────────────────────────────
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MAX_TOKENS: int = 1024
+    GEMINI_TIMEOUT: int = 30
 
-    # MES Connector
-    MES_HOST: str = os.getenv("MES_HOST", "")
-    MES_PORT: int = int(os.getenv("MES_PORT", "8001"))
-    MES_TIMEOUT: int = int(os.getenv("MES_TIMEOUT", "30"))
-    MES_USER: str = os.getenv("MES_USER", "paaim")
-    MES_PASSWORD: str = os.getenv("MES_PASSWORD", "password")
+    # ── Live stream source (factory-stream service) ────────────────────────
+    STREAM_SOURCE_URL: str = "http://localhost:9100"
 
-    # CMMS Connector
-    CMMS_HOST: str = os.getenv("CMMS_HOST", "")
-    CMMS_PORT: int = int(os.getenv("CMMS_PORT", "8002"))
-    CMMS_TIMEOUT: int = int(os.getenv("CMMS_TIMEOUT", "30"))
+    # ── Event Bus (reliable ingestion backbone) ────────────────────────────
+    # EVENT_BUS = "memory" (durable JSONL log, runs anywhere) | "kafka"
+    EVENT_BUS: str = "memory"
+    BUS_DATA_DIR: str = "./data_bus"
+    BUS_EVENTS_TOPIC: str = "factory.events"
+    BUS_DECISIONS_TOPIC: str = "factory.decisions"
+    BUS_DLQ_TOPIC: str = "factory.events.dlq"
+    BUS_CONSUMER_GROUP: str = "paaim-orchestrator"
+    BUS_AUTO_CONSUME: bool = True          # start the background consumer on app startup
+    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
+
+    # ── Logging ────────────────────────────────────────────────────────────
+    LOG_LEVEL: str = "INFO"
+
+    # ── CORS ───────────────────────────────────────────────────────────────
+    CORS_ORIGINS: str = "http://localhost:3000"
+
+    # ── Rate limiting ──────────────────────────────────────────────────────
+    RATE_LIMIT_PER_MINUTE: int = 120
+
+    # ── JWT ────────────────────────────────────────────────────────────────
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60
+
+    # ── MES Connector ──────────────────────────────────────────────────────
+    MES_HOST: str = ""
+    MES_PORT: int = 8001
+    MES_TIMEOUT: int = 30
+    MES_USER: str = "paaim"
+    MES_PASSWORD: str = ""
+
+    # ── CMMS Connector ─────────────────────────────────────────────────────
+    CMMS_HOST: str = ""
+    CMMS_PORT: int = 8002
+    CMMS_TIMEOUT: int = 30
+
+    # ── ERP Connector ──────────────────────────────────────────────────────
+    ERP_HOST: str = ""
+    ERP_PORT: int = 8003
+    ERP_TIMEOUT: int = 30
+    ERP_CLIENT_ID: str = ""
+    ERP_CLIENT_SECRET: str = ""
+    ERP_API_PREFIX: str = "/api/v1"
+
+    # ── Derived helpers ────────────────────────────────────────────────────
+    @property
+    def cors_origins_list(self) -> List[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT == "production"
+
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
+        allowed = {"development", "staging", "production"}
+        if v not in allowed:
+            raise ValueError(f"ENVIRONMENT must be one of {allowed}")
+        return v
+
+    @model_validator(mode="after")
+    def enforce_production_secrets(self) -> "Settings":
+        if self.is_production:
+            if self.SECRET_KEY == "change-me-in-production-use-a-real-secret":
+                raise ValueError("SECRET_KEY must be set in production")
+            if not self.GEMINI_API_KEY:
+                raise ValueError("GEMINI_API_KEY must be set in production")
+        return self
+
 
 settings = Settings()
-

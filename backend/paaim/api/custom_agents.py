@@ -43,9 +43,11 @@ class CustomAgentRequest(BaseModel):
     name: str
     description: str
     domain: str
-    data_sources: List[DataSourceRequest]
     rules: List[RuleRequest]
     actions: List[str]
+    watch_signals: List[str] = []                       # canonical signals to watch
+    scope: Dict[str, Any] = {"type": "all"}             # all | machines | zone
+    data_sources: List[DataSourceRequest] = []          # legacy / optional
     enabled: bool = True
 
 
@@ -58,6 +60,39 @@ class CustomAgentResponse(BaseModel):
     enabled: bool
     created_at: str
     created_by: Optional[str]
+
+
+@router.post("/test-connection")
+async def test_connection_before_create(request: DataSourceRequest) -> dict:
+    """
+    Test a data source connection before creating an agent.
+    Accepts the same DataSourceRequest used in agent creation.
+    """
+    try:
+        ds_type = DataSourceType(request.type.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid data source type: {request.type}",
+        )
+
+    data_source = DataSource(
+        name=request.name or "test",
+        type=ds_type,
+        config=request.config,
+        query=request.query,
+        auth_type=request.auth_type,
+        auth_config=request.auth_config,
+    )
+    connector = get_connector_for_source(data_source)
+    if not connector:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No connector available for type: {request.type}",
+        )
+
+    success, message = await connector.test_connection()
+    return {"success": success, "message": message, "type": request.type}
 
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
@@ -82,10 +117,10 @@ async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentRespons
                     detail=f"Invalid operator: {rule.operator}. Must be one of: {[op.value for op in RuleOperator]}"
                 )
 
-        # Validate data source types
+        # Validate data source types (normalize to lowercase so frontend SCADA/IoT/REST_API all work)
         for ds in request.data_sources:
             try:
-                DataSourceType(ds.type)
+                DataSourceType(ds.type.lower())
             except ValueError:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -96,7 +131,7 @@ async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentRespons
         data_sources = [
             DataSource(
                 name=ds.name,
-                type=DataSourceType(ds.type),
+                type=DataSourceType(ds.type.lower()),
                 config=ds.config,
                 query=ds.query,
                 auth_type=ds.auth_type,
@@ -132,6 +167,8 @@ async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentRespons
             data_sources=data_sources,
             rules=rules,
             actions=request.actions,
+            watch_signals=request.watch_signals,
+            scope=request.scope or {"type": "all"},
             enabled=request.enabled,
             created_by="api_user",
         )
@@ -165,6 +202,11 @@ async def list_custom_agents() -> dict:
         registry = get_custom_agent_registry()
         agents = registry.list_agents()
 
+        def _iso(val):
+            if val is None:
+                return None
+            return val.isoformat() if hasattr(val, "isoformat") else str(val)
+
         custom_agents = [
             {
                 "id": agent.id,
@@ -172,8 +214,17 @@ async def list_custom_agents() -> dict:
                 "description": agent.description,
                 "domain": agent.domain,
                 "enabled": agent.enabled,
+                "watch_signals": list(agent.watch_signals or []),
+                "scope": agent.scope or {"type": "all"},
                 "data_sources_count": len(agent.data_sources),
                 "rules_count": len(agent.rules),
+                "actions": list(agent.actions or []),
+                "data_sources": [
+                    {"name": ds.name, "type": getattr(ds.type, "value", ds.type)}
+                    for ds in agent.data_sources
+                ],
+                "created_at": _iso(getattr(agent, "created_at", None)),
+                "updated_at": _iso(getattr(agent, "updated_at", None)),
             }
             for agent in agents
         ]

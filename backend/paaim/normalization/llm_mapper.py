@@ -17,7 +17,6 @@ import logging
 from typing import Dict, Optional
 
 from paaim.normalization.mapping import FieldMapping
-from paaim.normalization.schema import SIGNAL_VOCAB
 
 logger = logging.getLogger(__name__)
 
@@ -40,10 +39,16 @@ def _extract_json(text: str) -> Optional[dict]:
 
 def llm_resolve_fields(
     unresolved: Dict[str, object],
+    vocab: Dict[str, dict],
     sibling_fields: Optional[list] = None,
 ) -> Dict[str, FieldMapping]:
     """Resolve leftover fields with Gemini. Returns {raw_field: FieldMapping} for
-    confidently-mapped fields only. Empty dict if Gemini is unavailable."""
+    confidently-mapped fields only. Empty dict if Gemini is unavailable.
+
+    `vocab` is the factory's own vocabulary: it is both the list the model must
+    choose from and the check its answer is validated against. Handing it the
+    wrong tenant's signals would produce confident mappings onto signals this
+    plant does not have."""
     if not unresolved:
         return {}
 
@@ -56,11 +61,11 @@ def llm_resolve_fields(
         logger.info("Tier-4 skipped — Gemini not configured; %d field(s) left unmapped", len(unresolved))
         return {}
 
-    vocab = list(SIGNAL_VOCAB.keys())
+    vocab_names = list(vocab.keys())
     prompt = f"""You map raw industrial sensor field names to a FIXED canonical vocabulary.
 
 Canonical signals (choose EXACTLY one of these, or "none" if no good match):
-{vocab}
+{vocab_names}
 
 For each raw field below you are given a sample value. Decide the best canonical
 signal. If a field is a flag/id/status/unrelated value, use "none".
@@ -89,8 +94,8 @@ JSON:"""
             continue
         signal = str(info.get("signal", "none"))
         conf = float(info.get("confidence", 0) or 0)
-        if signal in SIGNAL_VOCAB and conf >= 0.5:
-            meta = SIGNAL_VOCAB[signal]
+        if signal in vocab and conf >= 0.5:
+            meta = vocab[signal]
             out[raw] = FieldMapping(
                 raw=raw, signal=signal, unit=meta.get("unit", ""),
                 resolved_by="llm", confidence=round(conf, 3),

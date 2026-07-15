@@ -61,6 +61,7 @@ def _allowed_actions_block() -> str:
 
 _gemini_client = None
 _gemini_available = False
+_gemini_model_name = ""   # the model actually instantiated, for honest provenance
 
 
 def _get_gemini():
@@ -85,6 +86,8 @@ def _get_gemini():
             model_name = model_name or "gemini-2.0-flash"
             _gemini_client = genai.GenerativeModel(model_name)
             _gemini_available = True
+            global _gemini_model_name
+            _gemini_model_name = model_name
             logger.info("Gemini client initialised", extra={"model": model_name})
         else:
             logger.warning("GEMINI_API_KEY not set — agents will use rule-based fallback")
@@ -96,6 +99,10 @@ def _get_gemini():
 # ── Agent analysis data model ──────────────────────────────────────────────────
 
 class AgentAnalysis(BaseModel):
+    # `model_used` collides with pydantic's protected `model_` prefix; the field
+    # name is worth keeping because it is what the evidence pack calls it.
+    model_config = {"protected_namespaces": ()}
+
     agent_name: str
     event_type: str
     confidence: float
@@ -103,6 +110,10 @@ class AgentAnalysis(BaseModel):
     reasoning: str
     assumptions: List[str]
     timestamp: Optional[datetime] = None
+    # Which model produced this, or None when the deterministic rules did. The
+    # product's claim is auditability, but this was dropped during parsing — so
+    # the stored evidence could not answer "was this actually AI?".
+    model_used: Optional[str] = None
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -217,14 +228,16 @@ Rules:
             logger.info(f"{self.name}: routed to RULES tier — {model_decision.reason}")
             return None
 
-        logger.info(
-            f"{self.name}: model={model_decision.model_id} tier={model_decision.tier} "
-            f"reason='{model_decision.reason}'"
-        )
-
         client, available = _get_gemini()
         if not available or client is None:
             return None
+
+        logger.info(
+            f"{self.name}: model={_gemini_model_name} tier={model_decision.tier} "
+            f"reason='{model_decision.reason}'"
+            + ("" if _gemini_model_name == model_decision.model_id
+               else f" (router preferred {model_decision.model_id}; one client is configured)")
+        )
 
         prompt = self._build_prompt(event_data, domain_context)
         try:
@@ -237,9 +250,10 @@ Rules:
                     text = text[4:]
             result = json.loads(text)
             # Attach routing metadata so it appears in the evidence pack
-            result["_model_used"] = model_decision.model_id
+            result["_model_used"] = _gemini_model_name
             result["_model_tier"] = model_decision.tier.value
             result["_routing_reason"] = model_decision.reason
+            result["_model_preferred"] = model_decision.model_id
             return result
         except Exception as e:
             logger.warning(f"Gemini call failed for {self.name}: {e}")
@@ -271,6 +285,7 @@ Rules:
             recommendations=recommendations,
             reasoning=data.get("reasoning", "Gemini analysis"),
             assumptions=data.get("assumptions", []),
+            model_used=data.get("_model_used"),
         )
 
 

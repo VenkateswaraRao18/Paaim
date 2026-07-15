@@ -13,8 +13,28 @@ import {
 import { useSelectedFactory } from '@/lib/store';
 import { plainSignal, plainAction, plainMachine } from '@/lib/labels';
 import { Eyebrow, SectionHeader, Card, KpiTile, SignalPill, AlertBar } from '@/components/ui';
+import type { IncidentPriority, PriorityLevel } from '@/lib/api-client';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'neutral';
+
+// ─── Triage (L1/L2/L3) ─────────────────────────────────────────────
+const PRIORITY_RANK: Record<PriorityLevel, number> = { L1: 0, L2: 1, L3: 2 };
+const priorityRank = (p?: IncidentPriority) => (p ? PRIORITY_RANK[p.level] : 3);
+const PRIORITY_META: Record<PriorityLevel, { label: string; cls: string }> = {
+  L1: { label: 'L1 · Critical', cls: 'bg-surface-bad text-coral border-coral/40' },
+  L2: { label: 'L2 · Elevated', cls: 'bg-surface-warn text-[#9A6B15] border-amber/40' },
+  L3: { label: 'L3 · Routine', cls: 'bg-paper text-dim border-line' },
+};
+
+function PriorityBadge({ p }: { p?: IncidentPriority }) {
+  if (!p) return null;
+  const m = PRIORITY_META[p.level];
+  return (
+    <span className={`inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${m.cls}`}>
+      {m.label}
+    </span>
+  );
+}
 
 // ─── mapping helpers (signal discipline — no rainbow) ──────────────
 function eventTone(eventType: string): Tone {
@@ -67,17 +87,25 @@ function DecisionCard({
   const rTone = riskTone(risk);
   const machine = incident?.machine_id ? plainMachine(incident.machine_id) : null;
   const signal = incident?.signal_name ? plainSignal(incident.signal_name) : null;
+  const prio = d.priority;
 
   return (
-    <Card focal={pending} className="p-4">
+    <Card focal={pending && prio?.level === 'L1'} className="p-4">
       {/* Incident line — what happened */}
       <div className="flex items-center gap-2 mb-2">
-        <span className={`w-2 h-2 rounded-full shrink-0 ${pending ? 'bg-amber animate-pulse' : dotClass[statusTone(d.status)]}`} />
+        {pending
+          ? <PriorityBadge p={prio} />
+          : <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass[statusTone(d.status)]}`} />}
         <span className="text-[13px] font-semibold text-ink truncate">
           {signal ?? 'Incident'}{machine && <span className="text-dim font-normal"> · {machine}</span>}
         </span>
         <span className="font-mono text-[10.5px] text-dim uppercase tracking-wide ml-auto shrink-0">{timeAgo(d.created_at)}</span>
       </div>
+
+      {/* Why it ranks here — the triage rationale */}
+      {pending && prio?.rationale && (
+        <p className="text-[12px] text-dim mb-2 -mt-1">{prio.rationale}</p>
+      )}
 
       {/* Agent verdict → recommendation (the chain) */}
       <div className="pl-4 border-l-2 border-line ml-1 space-y-1.5">
@@ -134,8 +162,12 @@ export default function DashboardPage() {
 
   const incidents: any[] = eventsList?.events ?? [];
   const dbDecisions: DecisionListItem[] = decisionsData?.decisions ?? [];
-  const pending = dbDecisions.filter((d) => d.status === 'recommended');
+  // Attention queue, triaged: worst tier first, then by score within a tier.
+  const pending = dbDecisions
+    .filter((d) => d.status === 'recommended')
+    .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || (b.priority?.score ?? 0) - (a.priority?.score ?? 0));
   const resolved = dbDecisions.filter((d) => d.status !== 'recommended');
+  const tierCount = (lvl: PriorityLevel) => pending.filter((d) => d.priority?.level === lvl).length;
 
   // Join decision → its triggering incident (best-effort on event_id)
   const eventById = new Map<string, any>();
@@ -187,11 +219,18 @@ export default function DashboardPage() {
           {/* HERO — Needs your approval */}
           <section>
             <SectionHeader
-              eyebrow="Needs your approval"
-              title="Decisions"
-              accent="waiting on you"
-              sub="Each is an incident the agents diagnosed and turned into a recommended action."
-              right={pending.length > 0 ? <SignalPill tone="warn">{pending.length} pending</SignalPill> : undefined}
+              eyebrow="Needs your approval · triaged by impact"
+              title="Attention queue"
+              accent="worst first"
+              sub="Ranked by financial exposure, delivery urgency, and safety — so the most costly incidents rise to the top."
+              right={pending.length > 0 ? (
+                <div className="flex items-center gap-1.5">
+                  {(['L1', 'L2', 'L3'] as PriorityLevel[]).map((lvl) => {
+                    const n = tierCount(lvl);
+                    return n > 0 ? <span key={lvl} className={`font-mono text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${PRIORITY_META[lvl].cls}`}>{n} {lvl}</span> : null;
+                  })}
+                </div>
+              ) : undefined}
             />
             {decisionsLoading ? (
               <div className="space-y-2">{Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-28 bg-card border border-line rounded-card animate-pulse" />)}</div>

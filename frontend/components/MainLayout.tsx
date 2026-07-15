@@ -30,12 +30,6 @@ const Icon = ({ d }: { d: ReactNode }) => (
 // ─── Grouped navigation ───────────────────────────────────────────
 const NAV_GROUPS = [
   {
-    section: 'Rescue',
-    items: [
-      { href: '/rescue', label: 'Line 3 Rescue', sub: 'Guided incident story', icon: icons.rescue },
-    ],
-  },
-  {
     section: 'Operate',
     items: [
       { href: '/dashboard', label: 'Operations', sub: 'Incidents & decisions', icon: icons.operations },
@@ -77,7 +71,7 @@ function getPageMeta(pathname: string): { title: string; sub: string } {
 export default function MainLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isLoggedIn, user, logout } = useAuthStore();
+  const { isLoggedIn, user, logout, factory } = useAuthStore();
 
   const PUBLIC_PATHS = ['/', '/login'];
   const isPublic = PUBLIC_PATHS.includes(pathname);
@@ -116,7 +110,10 @@ export default function MainLayout({ children }: { children: ReactNode }) {
             </Link>
           </div>
 
-          {/* Factory badge */}
+          {/* The signed-in tenant. Hardcoded "Factory 001 · AUSTIN, TX" until
+              now — which on a deployment serving two plants is the worst
+              possible label: every screen behind it is scoped to whichever
+              factory the token actually names, and the badge said otherwise. */}
           <div className="px-4 shrink-0">
             <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 bg-white/[0.05] border border-white/[0.08]">
               <span className="relative flex w-2 h-2 shrink-0">
@@ -124,8 +121,12 @@ export default function MainLayout({ children }: { children: ReactNode }) {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber" />
               </span>
               <div className="min-w-0">
-                <p className="text-white text-xs font-semibold leading-none truncate">Factory 001</p>
-                <p className="text-sage-dim text-[10px] mt-1 leading-none font-mono">AUSTIN, TX · LIVE</p>
+                <p className="text-white text-xs font-semibold leading-none truncate">
+                  {factory?.name ?? '—'}
+                </p>
+                <p className="text-sage-dim text-[10px] mt-1 leading-none font-mono truncate uppercase">
+                  {factory ? `${factory.location ?? factory.id} · LIVE` : 'no factory'}
+                </p>
               </div>
             </div>
           </div>
@@ -198,14 +199,29 @@ export default function MainLayout({ children }: { children: ReactNode }) {
               </span>
               System Live
             </div>
+            {/* Which plant am I looking at? On a deployment serving several
+                tenants this is not decoration: every number on every screen
+                below is scoped to it, and an operator must never have to guess
+                whose factory is on their monitor. */}
+            {factory && (
+              <>
+                <div className="w-px h-6 bg-line hidden sm:block" />
+                <div className="hidden sm:block text-right">
+                  <p className="text-xs font-semibold text-ink leading-none">{factory.name}</p>
+                  <p className="font-mono text-[10px] text-dim mt-1 leading-none">
+                    {factory.vocabulary_pack ?? factory.id}
+                  </p>
+                </div>
+              </>
+            )}
             <div className="w-px h-6 bg-line hidden sm:block" />
             <div className="flex items-center gap-2.5">
               <div className="text-right hidden sm:block">
-                <p className="text-xs font-semibold text-ink leading-none">{user?.name ?? 'Operator'}</p>
-                <p className="text-[10px] text-dim mt-1 leading-none">{user?.role ?? 'Operator'}</p>
+                <p className="text-xs font-semibold text-ink leading-none">{user?.full_name ?? 'Operator'}</p>
+                <p className="text-[10px] text-dim mt-1 leading-none">{user?.role ?? 'operator'}</p>
               </div>
               <div className="h-8 w-8 rounded-full bg-gradient-to-br from-[#7FA893] to-[#1B5443] flex items-center justify-center text-white text-[11px] font-bold">
-                {(user?.name ?? 'OP').split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                {(user?.full_name ?? 'OP').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <button
                 onClick={() => { logout(); router.replace('/login'); }}

@@ -15,34 +15,58 @@ from typing import Callable, Dict
 
 
 # ── Controlled signal vocabulary ───────────────────────────────────────────────
-# Every canonical signal declares its expected unit, the pipeline event_type it
-# maps to, and the raw field-name synonyms the heuristic resolver recognises.
-SIGNAL_VOCAB: Dict[str, dict] = {
-    "torque":              {"unit": "Nm",   "event_type": "maintenance", "synonyms": ["trq", "torque", "mtr_torque", "spindle_torque", "motor_torque"]},
-    "process_temperature": {"unit": "K",    "event_type": "maintenance", "synonyms": ["proc_temp", "process_temp", "process_t", "process_temperature"]},
-    "air_temperature":     {"unit": "K",    "event_type": "maintenance", "synonyms": ["air_temp", "ambient_temp", "air_temperature", "ambient"]},
-    "temperature":         {"unit": "C",    "event_type": "maintenance", "synonyms": ["temp", "temperature", "temp_c", "tempc"]},
-    "rotational_speed":    {"unit": "rpm",  "event_type": "maintenance", "synonyms": ["rpm", "speed", "rot_speed", "spindle_speed", "rotational_speed"]},
-    "tool_wear":           {"unit": "min",  "event_type": "maintenance", "synonyms": ["wear", "tool_life", "tool_wear", "toolwear"]},
-    "vibration":           {"unit": "mm/s", "event_type": "maintenance", "synonyms": ["vib", "vibration", "vibration_rms", "vibr"]},
-    "pressure":            {"unit": "bar",  "event_type": "maintenance", "synonyms": ["press", "pressure", "hyd_pressure", "hydraulic_pressure"]},
-    "coolant_pressure":    {"unit": "bar",  "event_type": "maintenance", "synonyms": ["coolant_press", "coolant_pressure", "coolant"]},
-    "power":               {"unit": "kW",   "event_type": "energy",      "synonyms": ["kw", "power", "power_draw", "load_kw", "power_kw"]},
-    "energy":              {"unit": "kWh",  "event_type": "energy",      "synonyms": ["kwh", "energy", "consumption", "energy_kwh"]},
-}
+# There is deliberately no SIGNAL_VOCAB here any more.
+#
+# It was a module-level dict seeded with the CNC pack, which the vocabulary store
+# then "replaced in place" so that every importer picked the plant's signals up
+# for free. Convenient, and single-tenant by construction: one process serving a
+# dairy and a machine shop had exactly one vocabulary, and whichever tenant
+# configured theirs last silently redefined the other's signals — no error, no
+# log, just a filling line whose tags suddenly meant spindle torque.
+#
+# A vocabulary belongs to a factory. Ask for one by tenant:
+#
+#     from paaim.normalization.vocabulary import vocab_for, direction_for
+#     vocab = vocab_for(factory_id)
+#
+# and pass it to whatever needs to resolve a signal. Starter packs live in
+# paaim.normalization.vocabulary; plants edit their own copy.
 
 
 # ── Unit transforms ────────────────────────────────────────────────────────────
+# Every transform must be monotonically increasing. Thresholds and learned
+# baselines are converted through these same functions, and an order-reversing
+# transform would silently invert "over the limit" into "under it".
 def _identity(v: float) -> float: return v
 def _celsius_to_k(v: float) -> float: return v + 273.15
 def _kelvin_to_c(v: float) -> float: return v - 273.15
-def _scale_1000(v: float) -> float: return v / 1000.0  # e.g. W → kW
+# Fahrenheit is not an edge case: most US plants publish it, and a mapping that
+# cannot carry °F into a °C signal would reject them as an unresolvable conflict.
+def _f_to_c(v: float) -> float: return (v - 32.0) * 5.0 / 9.0
+def _c_to_f(v: float) -> float: return v * 9.0 / 5.0 + 32.0
+def _f_to_k(v: float) -> float: return (v - 32.0) * 5.0 / 9.0 + 273.15
+def _k_to_f(v: float) -> float: return (v - 273.15) * 9.0 / 5.0 + 32.0
+def _scale_1000(v: float) -> float: return v / 1000.0    # W → kW
+def _scale_0_001(v: float) -> float: return v * 1000.0   # kW → W
+def _psi_to_bar(v: float) -> float: return v * 0.0689475729
+def _bar_to_psi(v: float) -> float: return v / 0.0689475729
+def _kpa_to_bar(v: float) -> float: return v / 100.0
+def _bar_to_kpa(v: float) -> float: return v * 100.0
 
 TRANSFORMS: Dict[str, Callable[[float], float]] = {
     "identity": _identity,
     "celsius_to_k": _celsius_to_k,
     "kelvin_to_c": _kelvin_to_c,
+    "fahrenheit_to_c": _f_to_c,
+    "celsius_to_f": _c_to_f,
+    "fahrenheit_to_k": _f_to_k,
+    "kelvin_to_f": _k_to_f,
     "scale_1000": _scale_1000,
+    "scale_0_001": _scale_0_001,
+    "psi_to_bar": _psi_to_bar,
+    "bar_to_psi": _bar_to_psi,
+    "kpa_to_bar": _kpa_to_bar,
+    "bar_to_kpa": _bar_to_kpa,
 }
 
 

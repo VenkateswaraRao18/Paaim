@@ -1,0 +1,20 @@
+{
+  "rules": [
+    {
+      "rule_id": "rule_0x4F3_no_reset",
+      "status": "pending_human_approval",
+      "rule_text": "Do not reset 0x4F3 when torque and camera anomaly are both high. Inspect clamp/torque tool and hold affected units first.",
+      "applies_to": [
+        "Line 3",
+        "Station C3",
+        "MTR03_TORQUE",
+        "CAM02_ANOMALY"
+      ],
+      "source_incidents": [
+        "WO-3391",
+        "WO-2984"
+      ],
+      "watch_window": "72h"
+    }
+  ]
+}

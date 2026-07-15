@@ -6,8 +6,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import logging
+import os
+import re
 
 logger = logging.getLogger(__name__)
+
+# Sentinel: a rule's field is genuinely absent (vs. present-but-falsy like 0).
+_MISSING = object()
 
 
 class DataSourceType(str, Enum):
@@ -229,16 +234,37 @@ class CustomAgentExecutor:
 
         return combined_data
 
+    @staticmethod
+    def _resolve_field(field: str, data: Dict[str, Any]) -> Any:
+        """
+        Find the value a rule refers to.
+
+        Rules are written against the canonical vocabulary (field: "temperature"),
+        but a pipeline event carries the reading as
+        {"signal_name": "temperature", "signal_value": 95.2} — so a plain
+        `data[field]` lookup never matches and the agent silently does nothing.
+        Resolve both shapes; return _MISSING when the event is about some other
+        signal entirely (a correct, quiet no-op).
+        """
+        if field in data:
+            return data[field]
+        if data.get("signal_name") == field and "signal_value" in data:
+            return data["signal_value"]
+        return _MISSING
+
     def _evaluate_rule(
         self,
         rule: Rule,
         data: Dict[str, Any],
     ) -> bool:
         """Evaluate single rule against data."""
-        if rule.field not in data:
+        field_value = self._resolve_field(rule.field, data)
+        if field_value is _MISSING:
+            self.logger.debug(
+                f"Rule field '{rule.field}' not present in event "
+                f"(signal={data.get('signal_name')}) — rule skipped"
+            )
             return False
-
-        field_value = data[rule.field]
 
         if rule.operator == RuleOperator.EQUALS:
             return field_value == rule.value
@@ -334,18 +360,35 @@ class CustomAgentExecutor:
         return recommendations
 
 
-AGENTS_PERSIST_PATH = "custom_agents.json"
+AGENTS_DIR = os.getenv("PAAIM_TENANT_STATE_DIR", "tenant_state")
+
+
+def _safe_id(factory_id: str) -> str:
+    """A factory id becomes a filename here, so it must not escape the directory."""
+    s = re.sub(r"[^A-Za-z0-9_.-]", "_", (factory_id or "").strip())
+    if not s or s in (".", ".."):
+        raise ValueError(f"Unusable factory id: {factory_id!r}")
+    return s
 
 
 class CustomAgentRegistry:
-    """Registry for managing custom agents."""
+    """
+    One factory's custom monitors.
 
-    def __init__(self, persist_path: str = AGENTS_PERSIST_PATH):
-        """Initialize registry."""
+    Per tenant, not global: monitors were persisted to a single
+    `custom_agents.json`, so every factory's monitors ran against every
+    factory's incidents. A dairy's "Pasteuriser Watch" would have woken on a
+    machine shop's spindle — billing the wrong customer for the reasoning, and
+    putting one plant's process data in another's incident.
+    """
+
+    def __init__(self, factory_id: str, dir_: str = AGENTS_DIR):
+        self.factory_id = factory_id
         self.agents: Dict[str, CustomAgentDefinition] = {}
         self.executors: Dict[str, CustomAgentExecutor] = {}
         self.logger = logging.getLogger(__name__)
-        self.persist_path = persist_path
+        os.makedirs(dir_, exist_ok=True)
+        self.persist_path = os.path.join(dir_, f"monitors_{_safe_id(factory_id)}.json")
         self._load_from_disk()
 
     def _load_from_disk(self) -> None:
@@ -765,19 +808,37 @@ def get_connector_for_source(data_source: DataSource) -> Optional[DataSourceConn
     return None
 
 
-# Global registry instance
-_registry: Optional[CustomAgentRegistry] = None
+# One registry per factory. There is deliberately no global one: a monitor
+# belongs to the plant that created it, and the orchestrator must only ever wake
+# the monitors of the factory whose incident it is handling.
+_registries: Dict[str, CustomAgentRegistry] = {}
 
 
-def get_custom_agent_registry() -> CustomAgentRegistry:
-    """Get or create global custom agent registry."""
-    global _registry
-    if _registry is None:
-        _registry = CustomAgentRegistry()
-    return _registry
+def get_custom_agent_registry(factory_id: str) -> CustomAgentRegistry:
+    """This factory's monitor registry. `factory_id` is required, deliberately."""
+    if not factory_id:
+        raise ValueError(
+            "Monitors belong to a factory — pass the tenant's id. "
+            "There is deliberately no global registry to fall back on."
+        )
+    if factory_id not in _registries:
+        _registries[factory_id] = CustomAgentRegistry(factory_id)
+    return _registries[factory_id]
+
+
+def load_all_tenant_registries(dir_: str = AGENTS_DIR) -> Dict[str, CustomAgentRegistry]:
+    """Discover every factory with saved monitors — for startup, not request paths."""
+    try:
+        names = os.listdir(dir_)
+    except FileNotFoundError:
+        return _registries
+    for name in names:
+        m = re.match(r"^monitors_(.+)\.json$", name)
+        if m:
+            get_custom_agent_registry(m.group(1))
+    return _registries
 
 
 def reset_custom_agent_registry() -> None:
-    """Reset registry (for testing)."""
-    global _registry
-    _registry = None
+    """Reset all registries (for testing)."""
+    _registries.clear()

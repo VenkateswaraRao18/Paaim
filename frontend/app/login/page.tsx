@@ -30,8 +30,8 @@ const STATUS_PILL: Record<string, string> = {
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoggedIn } = useAuthStore();
-  const [email, setEmail]       = useState('demo@paaim.io');
-  const [password, setPassword] = useState('demo123');
+  const [email, setEmail]       = useState('ops@northfield.example');
+  const [password, setPassword] = useState('northfield123');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const [tick, setTick]         = useState(0);
@@ -46,11 +46,12 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 700));
-    const ok = login(email, password);
+    // A real round-trip now. This used to sleep 700ms to feel like a network
+    // call, then check the password against an array in the browser.
+    const res = await login(email, password);
     setLoading(false);
-    if (ok) router.replace('/dashboard');
-    else setError('Invalid credentials');
+    if (res.ok) router.replace('/dashboard');
+    else setError(res.error ?? 'Invalid email or password.');
   };
 
   return (
@@ -226,22 +227,25 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo credentials */}
+          {/* Two real tenants on one deployment. Signing in as each is the
+              demonstration: different plant, vocabulary, monitors and incidents,
+              and neither can see the other. */}
           <div className="mt-6 pt-6 border-t border-line">
-            <p className="font-mono text-[10.5px] font-semibold text-dim uppercase tracking-[0.16em] mb-3">Demo credentials</p>
+            <p className="font-mono text-[10.5px] font-semibold text-dim uppercase tracking-[0.16em] mb-3">Sign in as</p>
             <div className="space-y-2">
               {[
-                { role: 'Operator', email: 'demo@paaim.io', pwd: 'demo123',  color: 'text-pine-2 bg-surface-ok border-moss' },
-                { role: 'Admin',    email: 'admin@paaim.io', pwd: 'admin123', color: 'text-amber bg-surface-warn border-amber' },
-              ].map(({ role, email: e, pwd, color }) => (
+                { plant: 'Northfield Foods', kind: 'Dairy / HTST', email: 'ops@northfield.example', pwd: 'northfield123', color: 'text-pine-2 bg-surface-ok border-moss' },
+                { plant: 'Precision Parts',  kind: 'CNC machining', email: 'ops@precision.example',  pwd: 'precision123',  color: 'text-amber bg-surface-warn border-amber' },
+              ].map(({ plant, kind, email: e, pwd, color }) => (
                 <button
                   key={e}
                   type="button"
                   onClick={() => { setEmail(e); setPassword(pwd); setError(''); }}
-                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-line bg-white hover:bg-paper transition-colors text-xs"
+                  className="w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl border border-line bg-white hover:bg-paper transition-colors text-xs"
                 >
-                  <span className={`font-mono font-bold px-2 py-0.5 rounded-md border text-[11px] uppercase tracking-wide ${color}`}>{role}</span>
-                  <span className="text-dim font-mono">{e}</span>
+                  <span className={`font-mono font-bold px-2 py-0.5 rounded-md border text-[11px] uppercase tracking-wide shrink-0 ${color}`}>{kind}</span>
+                  <span className="text-ink font-semibold truncate">{plant}</span>
+                  <span className="text-dim font-mono truncate">{e}</span>
                 </button>
               ))}
             </div>

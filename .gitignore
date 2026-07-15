@@ -1,9 +1,11 @@
-# Environment
+# ── Secrets / local env ──────────────────────────────────────────────────────
 .env
 .env.local
 .env.*.local
+!.env.example
+!**/.env.example
 
-# Python
+# ── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -29,46 +31,52 @@ venv/
 ENV/
 env/
 .venv
+.venv*/
+**/venv/
 
-# FastAPI/Uvicorn
-*.log
-*.pot
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Node (frontend)
+# ── Node / Next.js ───────────────────────────────────────────────────────────
+node_modules/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.nuxt
 frontend/dist
 frontend/.cache/
-frontend/.vuepress/dist
-frontend/.serverless/
-frontend/.fusebox/
-frontend/.dynamodb/
-frontend/.tern-port
+*.tsbuildinfo
 
-# Testing
+# ── Databases & local runtime state (Docker volume / laptop runs) ────────────
+*.db
+*.sqlite
+*.sqlite3
+backend/data_bus/
+**/data_bus/
+backend/.wipe_backup_*/
+backend/paaim.db
+
+# Tenant JSON rewritten at runtime in Docker (/data); keep the committed seeds
+# under backend/tenant_state/ — do not ignore that folder.
+
+# ── Large / optional research dumps (sample CSVs stay tracked) ───────────────
+backend/data_adapters/ai4i2020.csv
+
+# ── Generated validation output ──────────────────────────────────────────────
+backend/validation/reports/
+
+# ── Logs & coverage ──────────────────────────────────────────────────────────
+*.log
+*.pot
 .coverage
 .pytest_cache/
 htmlcov/
 
-# Build
-dist/
-build/
-
-# Misc
+# ── IDE / OS ─────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 Thumbs.db
+
+# ── Internal drafts not needed to run the product ────────────────────────────
+progress_report/

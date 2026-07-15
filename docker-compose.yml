@@ -1,69 +1,71 @@
-version: '3.8'
+# PAAIM — the whole product on one laptop.
+#
+#     cp .env.example .env        # optional: add a Gemini key
+#     docker compose up --build   # first run ~3-4 min, then seconds
+#     open http://localhost:3000
+#
+# This replaced a compose file that stood up Postgres and Redis, mounted the
+# source over the image, ran uvicorn with --reload, and had no frontend, no
+# plant to connect to, and no Dockerfile to build. It could not have started.
+#
+# Everything a cloud deployment would have to externalise — SQLite, the tenant
+# state files, the in-memory event bus, the single-process watchers — is exactly
+# right on one machine. No Postgres, no Redis, no broker. One volume.
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: paaim-postgres
+  # ── The two simulated plants ────────────────────────────────────────────
+  # One image, two plants: a dairy and a machine shop that share nothing but
+  # the code. That is the demo.
+  stream-food:
+    build: ./factory-stream
     environment:
-      POSTGRES_USER: paaim
-      POSTGRES_PASSWORD: paaim_dev
-      POSTGRES_DB: paaim_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U paaim"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      STREAM_PLANT: food            # °F, psi, grams — two signals fail LOW
+      STREAM_PORT: "9100"
+    ports: ["9100:9100"]            # published only so you can curl it
 
-  redis:
-    image: redis:7-alpine
-    container_name: paaim-redis
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  stream-cnc:
+    build: ./factory-stream
+    environment:
+      STREAM_PLANT: cnc             # °C, bar, kW
+      STREAM_PORT: "9101"
+    ports: ["9101:9101"]
 
-  backend:
+  # ── The API ─────────────────────────────────────────────────────────────
+  api:
     build: ./backend
-    container_name: paaim-backend
     environment:
-      DATABASE_URL: postgresql://paaim:paaim_dev@postgres:5432/paaim_db
-      REDIS_URL: redis://redis:6379/0
-      ENVIRONMENT: development
-      PYTHONUNBUFFERED: 1
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      # Optional. Without it the agents fall back to deterministic rules and
+      # say so on screen — the product runs, the reasoning just isn't Gemini's.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-dev-only-not-a-production-secret}
+      CORS_ORIGINS: http://localhost:3000
+      # Container names, not localhost: inside this network `localhost:9100`
+      # would mean the API container itself. The seeder connects the sources
+      # using these, so nobody has to know that.
+      DEMO_STREAM_FOOD: http://stream-food:9100
+      DEMO_STREAM_CNC: http://stream-cnc:9101
     volumes:
-      - ./backend:/app
-    command: uvicorn paaim.main:app --host 0.0.0.0 --port 8000 --reload
+      - paaim-data:/data            # SQLite + tenant vocabularies/mappings + bus log
+    ports: ["8000:8000"]
+    depends_on: [stream-food, stream-cnc]
+    # Seed two tenants and their whole setup, then serve. Both seeders are
+    # idempotent, so this is safe on every `up`.
+    command: >
+      sh -c "python seed_tenants.py &&
+             uvicorn paaim.main:app --host 0.0.0.0 --port 8000 &
+             sleep 6 && python commission_demo.py; wait"
 
-  # Ollama (optional, for local LLM experiments)
-  # ollama:
-  #   image: ollama/ollama
-  #   container_name: paaim-ollama
-  #   ports:
-  #     - "11434:11434"
-  #   environment:
-  #     OLLAMA_HOST: 0.0.0.0:11434
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   # Pull model on startup: ollama pull gemma:2b
+  # ── The web app ─────────────────────────────────────────────────────────
+  web:
+    build:
+      context: ./frontend
+      args:
+        # The browser runs on the host, so it talks to the published port —
+        # not to `api:8000`, which only exists inside this network. NEXT_PUBLIC_*
+        # is inlined at build time, which is why it is a build arg.
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+    ports: ["3000:3000"]
+    depends_on: [api]
 
 volumes:
-  postgres_data:
-  # ollama_data:
-
-networks:
-  default:
-    name: paaim-network
+  paaim-data:

@@ -1,0 +1,3 @@
+metric,threshold,owner,window,status
+0x4F3 recurrence,0 events,Maintenance Lead,next_72_hours,pending
+QA anomaly rate,< 0.70,QA Lead,next_shift,pending

@@ -1,0 +1,133 @@
+{
+  "pack_id": "food_processing",
+  "signals": {
+    "product_temperature": {
+      "unit": "C",
+      "event_type": "quality",
+      "higher_is_worse": true,
+      "synonyms": [
+        "prod_temp",
+        "product_temp",
+        "pasteur_temp",
+        "cook_temp"
+      ],
+      "description": "Product temperature \u2014 a CCP on pasteurisation"
+    },
+    "fill_weight": {
+      "unit": "g",
+      "event_type": "quality",
+      "higher_is_worse": true,
+      "synonyms": [
+        "fill_wt",
+        "fill_weight",
+        "net_weight",
+        "checkweight"
+      ],
+      "description": "Filled net weight \u2014 under is a legal problem, over is giveaway"
+    },
+    "fill_volume": {
+      "unit": "ml",
+      "event_type": "quality",
+      "higher_is_worse": true,
+      "synonyms": [
+        "fill_vol",
+        "fill_volume"
+      ],
+      "description": "Filled volume"
+    },
+    "seal_temperature": {
+      "unit": "C",
+      "event_type": "quality",
+      "higher_is_worse": false,
+      "synonyms": [
+        "seal_temp",
+        "sealer_temp",
+        "jaw_temp"
+      ],
+      "description": "Seal jaw temperature \u2014 low means weak seals"
+    },
+    "viscosity": {
+      "unit": "cP",
+      "event_type": "quality",
+      "higher_is_worse": true,
+      "synonyms": [
+        "visc",
+        "viscosity"
+      ],
+      "description": "Product viscosity"
+    },
+    "ph": {
+      "unit": "pH",
+      "event_type": "quality",
+      "higher_is_worse": true,
+      "synonyms": [
+        "ph",
+        "acidity"
+      ],
+      "description": "Product pH \u2014 a CCP for acidified foods"
+    },
+    "line_speed": {
+      "unit": "units/min",
+      "event_type": "production",
+      "higher_is_worse": false,
+      "synonyms": [
+        "line_speed",
+        "throughput",
+        "rate"
+      ],
+      "description": "Line throughput"
+    },
+    "motor_current": {
+      "unit": "A",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "amps",
+        "current",
+        "motor_current",
+        "load_amps"
+      ],
+      "description": "Motor current \u2014 mixer load"
+    },
+    "vibration": {
+      "unit": "mm/s",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "vib",
+        "vibration"
+      ],
+      "description": "Vibration \u2014 bearing wear"
+    },
+    "pressure": {
+      "unit": "bar",
+      "event_type": "maintenance",
+      "higher_is_worse": false,
+      "synonyms": [
+        "press",
+        "pressure"
+      ],
+      "description": "Line/hydraulic pressure"
+    },
+    "temperature": {
+      "unit": "C",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "temp",
+        "temperature"
+      ],
+      "description": "Equipment temperature"
+    },
+    "power": {
+      "unit": "kW",
+      "event_type": "energy",
+      "higher_is_worse": true,
+      "synonyms": [
+        "kw",
+        "power"
+      ],
+      "description": "Power draw"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "presets": [
+    {
+      "preset_id": "protect_shipment",
+      "label": "Protect shipment",
+      "description": "Prioritise on-time delivery of PO-4817.",
+      "factor_overrides": {
+        "deadline_buffer_min": 40,
+        "line2_capacity_pct": 80
+      }
+    },
+    {
+      "preset_id": "protect_quality",
+      "label": "Protect quality",
+      "description": "Quality-first: reject a fast restart.",
+      "factor_overrides": {
+        "qa_risk_tolerance": "low",
+        "qa_hold_units": 80
+      }
+    },
+    {
+      "preset_id": "maintenance_delayed",
+      "label": "Maintenance delayed",
+      "description": "Tech is 30 minutes out; inspection runs long.",
+      "factor_overrides": {
+        "maintenance_arrival_min": 30,
+        "inspection_duration_min": 35
+      }
+    },
+    {
+      "preset_id": "line2_unavailable",
+      "label": "Line 2 unavailable",
+      "description": "Reroute is off the table.",
+      "factor_overrides": {
+        "line2_capacity_pct": 0
+      }
+    },
+    {
+      "preset_id": "deadline_compressed",
+      "label": "Customer deadline compressed",
+      "description": "Shipment window nearly closed.",
+      "factor_overrides": {
+        "deadline_buffer_min": 30
+      }
+    },
+    {
+      "preset_id": "spare_unavailable",
+      "label": "Spare unavailable",
+      "description": "No spare actuator on hand; repair risk rises.",
+      "factor_overrides": {
+        "spare_actuator_available": false,
+        "inspection_duration_min": 35
+      }
+    }
+  ]
+}

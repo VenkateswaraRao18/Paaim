@@ -1,174 +1,126 @@
-"""Authentication endpoints for user login and token management."""
+"""
+Authentication — login, refresh, and who am I.
 
-from fastapi import APIRouter, HTTPException, Depends, Header
-from datetime import datetime
+Logins were previously resolved by an if/elif on the email address: anything
+ending `@paaim.local` with the password `password` was admitted and handed
+factory_001. There were no users, nothing was hashed, and nothing was checked.
+
+Note the single `AuthService`, imported from paaim.auth.deps. This module used
+to build its own from `JWT_SECRET_KEY` while the rest of the app verified with
+`settings.SECRET_KEY` — two different secrets, so every token this endpoint
+issued would have failed verification everywhere it was used.
+"""
+
+from __future__ import annotations
+
 import logging
+from datetime import datetime
+from typing import Optional
 
-from paaim.auth.service import (
-    AuthService,
-    AuthConfig,
-    RBACMiddleware,
-    LoginRequest,
-    TokenResponse,
-    UserResponse,
-    UserRole,
-)
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from paaim.auth.deps import current_user, get_auth_service
+from paaim.auth.service import LoginRequest, TokenResponse, UserResponse, UserRole
+from paaim.config import settings
+from paaim.models import FactoryModel, UserModel, get_db
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Initialize auth service (in production, load secret from environment)
-import os
-secret_key = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
-auth_config = AuthConfig(secret_key=secret_key)
-auth_service = AuthService(auth_config)
-rbac = RBACMiddleware(auth_service)
+auth_service = get_auth_service()
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest):
-    """
-    Authenticate user and return JWT tokens.
-
-    In production, validate credentials against database.
-    For now, accept any email with password 'password'.
-    """
-    # TODO: In production, validate against database
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """Authenticate against the users table and issue a tenant-scoped token."""
     if not request.email or not request.password:
-        raise HTTPException(
-            status_code=400,
-            detail="Email and password required",
-        )
+        raise HTTPException(status_code=400, detail="Email and password are required.")
 
-    # Temporary: Accept demo user
-    if request.email == "admin@paaim.local" and request.password == "password":
-        user_id = "user_001"
-        role = UserRole.ADMIN
-        factory_id = None
-    elif request.email.endswith("@paaim.local") and request.password == "password":
-        user_id = f"user_{request.email.split('@')[0]}"
-        role = UserRole.OPERATOR
-        factory_id = "factory_001"
-    else:
-        logger.warning(f"Failed login attempt for {request.email}")
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid credentials",
-        )
+    user = (await db.execute(
+        select(UserModel).where(UserModel.email == request.email.strip().lower())
+    )).scalar_one_or_none()
 
-    access_token = auth_service.create_access_token(
-        user_id=user_id,
-        role=role,
-        factory_id=factory_id,
-    )
-    refresh_token = auth_service.create_refresh_token(user_id)
+    # One message for "no such user" and "wrong password", and the hash is
+    # verified either way — a fast 401 for unknown addresses tells an attacker
+    # which of your customers' emails are real.
+    dummy = "$2b$12$" + "." * 53
+    ok = auth_service.verify_password(request.password, user.password_hash if user else dummy)
+    if not user or not ok:
+        logger.warning("Failed login for %s", request.email)
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="This account is disabled.")
+
+    user.last_login_at = datetime.utcnow()
+    db.add(user)
+
+    try:
+        role = UserRole(user.role)
+    except ValueError:
+        raise HTTPException(status_code=500, detail=f"Account has an unknown role '{user.role}'.")
 
     return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=auth_config.access_token_expire_minutes * 60,
+        access_token=auth_service.create_access_token(
+            user_id=user.id, role=role, factory_id=user.factory_id,
+        ),
+        refresh_token=auth_service.create_refresh_token(user_id=user.id),
+        expires_in=settings.JWT_EXPIRE_MINUTES * 60,
     )
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(authorization: str = Header(None)):
-    """Refresh access token using refresh token."""
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="No authorization header",
-        )
+async def refresh_token(authorization: Optional[str] = Header(None),
+                        db: AsyncSession = Depends(get_db)):
+    """Exchange a refresh token for a new access token."""
+    parts = (authorization or "").split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Refresh token required.")
 
-    token = rbac.extract_token(authorization)
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authorization header",
-        )
-
-    payload = auth_service.decode_token(token)
+    payload = auth_service.decode_token(parts[1])
     if not payload or payload.get("type") != "refresh":
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid refresh token",
-        )
+        raise HTTPException(status_code=401, detail="Not a valid refresh token.")
 
-    # Create new access token
-    user_id = payload["sub"]
-    # TODO: Load role from database
-    access_token = auth_service.create_access_token(
-        user_id=user_id,
-        role=UserRole.OPERATOR,
-    )
+    # Re-read the user: their factory or role may have changed, and a refresh
+    # that reissues the old claims would keep stale access alive indefinitely.
+    user = (await db.execute(
+        select(UserModel).where(UserModel.id == payload["sub"])
+    )).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="This account no longer exists or is disabled.")
 
     return TokenResponse(
-        access_token=access_token,
-        refresh_token=token,
-        expires_in=auth_config.access_token_expire_minutes * 60,
+        access_token=auth_service.create_access_token(
+            user_id=user.id, role=UserRole(user.role), factory_id=user.factory_id,
+        ),
+        refresh_token=auth_service.create_refresh_token(user_id=user.id),
+        expires_in=settings.JWT_EXPIRE_MINUTES * 60,
     )
 
 
-@router.get("/me", response_model=UserResponse)
-async def get_current_user(authorization: str = Header(None)):
-    """Get current authenticated user."""
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="No authorization header",
-        )
+@router.get("/me")
+async def me(user: UserModel = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """The signed-in user and the factory they belong to — what the UI renders."""
+    factory = None
+    if user.factory_id:
+        f = (await db.execute(
+            select(FactoryModel).where(FactoryModel.id == user.factory_id)
+        )).scalar_one_or_none()
+        if f:
+            factory = {"id": f.id, "name": f.name, "location": f.location,
+                       "industry": f.industry, "vocabulary_pack": f.vocabulary_pack}
 
-    token = rbac.extract_token(authorization)
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authorization header",
-        )
-
-    payload = auth_service.verify_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-        )
-
-    # TODO: Load full user details from database
-    return UserResponse(
-        id=payload.sub,
-        email=f"{payload.sub}@paaim.local",
-        full_name=payload.sub,
-        role=payload.role.value,
-        factory_id=payload.factory_id,
-        is_active=True,
-    )
+    return {
+        "user": UserResponse(
+            id=user.id, email=user.email, full_name=user.full_name,
+            role=user.role, factory_id=user.factory_id, is_active=user.is_active,
+        ).dict(),
+        "factory": factory,
+    }
 
 
 @router.get("/verify")
-async def verify_token(authorization: str = Header(None)):
-    """Verify token validity."""
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="No authorization header",
-        )
-
-    token = rbac.extract_token(authorization)
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid authorization header",
-        )
-
-    payload = auth_service.verify_token(token)
-    if not payload:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-        )
-
-    return {
-        "valid": True,
-        "user_id": payload.sub,
-        "role": payload.role.value,
-        "expires_at": payload.exp.isoformat(),
-    }
+async def verify(user: UserModel = Depends(current_user)):
+    """Cheap liveness check for the frontend's stored token."""
+    return {"valid": True, "user_id": user.id, "factory_id": user.factory_id, "role": user.role}

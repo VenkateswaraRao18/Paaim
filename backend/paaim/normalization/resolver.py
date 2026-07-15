@@ -20,7 +20,6 @@ import re
 from typing import Dict, List, Optional
 
 from paaim.normalization.mapping import FieldMapping
-from paaim.normalization.schema import SIGNAL_VOCAB
 
 HEURISTIC_THRESHOLD = 0.72
 
@@ -52,47 +51,42 @@ def _score(raw_field: str, synonyms: List[str]) -> float:
 
 def resolve_field(
     raw_field: str,
+    vocab: Dict[str, dict],
     sample_value=None,
     unit_hint: Optional[str] = None,
     dictionary: Optional[Dict[str, str]] = None,
 ) -> Optional[FieldMapping]:
-    """Resolve ONE raw field to a canonical FieldMapping, or None if unresolved."""
+    """
+    Resolve ONE raw field to a canonical FieldMapping, or None if unresolved.
 
+    `vocab` is the factory's own vocabulary and is required. It used to be the
+    module-level SIGNAL_VOCAB, which meant this resolver silently answered for
+    whichever tenant had configured theirs most recently.
+    """
     # ── Tier 2: dictionary (exact known tag map for this vendor/source) ──
     if dictionary and raw_field in dictionary:
         signal = dictionary[raw_field]
-        meta = SIGNAL_VOCAB.get(signal, {})
+        meta = vocab.get(signal, {})
         return FieldMapping(raw=raw_field, signal=signal, unit=meta.get("unit", ""),
                             resolved_by="dictionary", confidence=1.0)
 
     # ── Tier 3: heuristic fuzzy match against the vocabulary ──
     best_signal, best_score = None, 0.0
-    for signal, meta in SIGNAL_VOCAB.items():
+    for signal, meta in vocab.items():
         score = _score(raw_field, [signal] + meta.get("synonyms", []))
         if score > best_score:
             best_signal, best_score = signal, score
 
     if best_signal and best_score >= HEURISTIC_THRESHOLD:
-        meta = SIGNAL_VOCAB[best_signal]
-        unit = unit_hint or meta.get("unit", "")
-        transform = _infer_transform(best_signal, unit, meta.get("unit", ""))
+        meta = vocab[best_signal]
+        # Units are reconciled centrally (paaim.normalization.units), against the
+        # unit the SOURCE declares — not a hint guessed here. This tier used to
+        # carry its own copy of the conversion table, which drifted the moment
+        # the real one gained °F: a mapping resolved here would claim identity
+        # while the same pair converted correctly one function away.
         return FieldMapping(raw=raw_field, signal=best_signal, unit=meta.get("unit", ""),
-                            transform=transform, resolved_by="heuristic",
+                            transform="identity", resolved_by="heuristic",
                             confidence=round(best_score, 3))
 
     # Unresolved → caller may escalate to Tier 4 (LLM) or leave unmapped
     return None
-
-
-def _infer_transform(signal: str, source_unit: str, canonical_unit: str) -> str:
-    """Pick a unit transform when the source unit differs from canonical."""
-    su, cu = (source_unit or "").lower(), (canonical_unit or "").lower()
-    if su == cu or not su:
-        return "identity"
-    if su in ("c", "celsius") and cu == "k":
-        return "celsius_to_k"
-    if su in ("k", "kelvin") and cu == "c":
-        return "kelvin_to_c"
-    if su in ("w", "watt", "watts") and cu == "kw":
-        return "scale_1000"
-    return "identity"

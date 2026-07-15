@@ -5,8 +5,9 @@ import { motion } from 'framer-motion';
 import { useCustomAgentMutation, useCustomAgents, useTestConnectionBeforeCreate } from '@/lib/api-client';
 import { Eyebrow, SectionHeader, Card, SignalPill } from '@/components/ui';
 
-// factory-stream (live sensor feed) + PAAIM backend (where watchers attach)
-const STREAM_BASE = process.env.NEXT_PUBLIC_STREAM_URL || 'http://localhost:9100';
+// PAAIM backend. Note there is no feed URL here: the browser must never talk to
+// a plant's SCADA directly, and a hardcoded one made this page list machines
+// from a plant nobody had connected.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 // The 5 always-on specialist monitors baked into the orchestrator
@@ -19,10 +20,10 @@ const BUILT_IN_MONITORS = [
 ];
 
 type StreamAgentStatus = {
-  key: string; machine_id: string; signal: string; label: string;
+  key: string; machine_id: string; signal: string; label: string; source_id: string;
   connected: boolean; events_raised: number; last_status: string;
+  last_value: number | null; unit: string; judged_by: string;
 };
-type SignalMeta = { machine_id: string; signal: string; label: string; unit: string };
 
 // ─── Per-source-type config field definitions ─────────────────────────────────
 
@@ -87,9 +88,24 @@ type DatasourceEntry = {
   connMessage: string;
 };
 
+/** Say an agent's scope the way an operator would. */
+function scopeText(scope: any): string {
+  const t = scope?.type ?? 'all';
+  if (t === 'machines') {
+    const m = scope?.machines ?? [];
+    return m.length ? m.join(', ') : 'No machines selected';
+  }
+  if (t === 'zone') return scope?.zone ? `Zone: ${scope.zone}` : 'No zone selected';
+  return 'Every machine in the plant';
+}
+
 export default function CustomAgentBuilder() {
   const [step, setStep] = useState<'list' | 'create' | 'detail'>('list');
   const [selectedAgent, setSelectedAgent] = useState<any>(null);
+  // Set while editing an existing agent; drives PUT-vs-POST on save.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  // Which sources actually reach the open agent (derived server-side).
+  const [agentSources, setAgentSources] = useState<any>(null);
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -116,15 +132,14 @@ export default function CustomAgentBuilder() {
 
   const agents = agentsData?.agents || [];
 
-  // ── Live signal watchers (stream agents) — attach a monitor to a signal ──
-  const [signals, setSignals] = useState<SignalMeta[]>([]);
+  // ── Live signal watchers — read-only ──
+  // Watchers are not created here. They are derived from a data source's
+  // confirmed mapping: tick a field to watch on Data Sources and one appears.
+  // This page used to offer an "Attach" button that made a watcher directly
+  // from the feed's tag list, skipping the mapping — so it had nothing to
+  // translate its raw tag with, and silently dropped every event it judged.
   const [streamAgents, setStreamAgents] = useState<Record<string, StreamAgentStatus>>({});
-  const [attachBusy, setAttachBusy] = useState(false);
 
-  useEffect(() => {
-    fetch(`${STREAM_BASE}/signals`).then((r) => r.json())
-      .then((d) => setSignals(d.signals ?? [])).catch(() => {});
-  }, []);
   useEffect(() => {
     let alive = true;
     const poll = async () => {
@@ -150,22 +165,6 @@ export default function CustomAgentBuilder() {
     fetch(`${API_BASE}/knowledge/context/factory_001/machines`).then((r) => r.json()).then((d) => setMachines(d.machines ?? [])).catch(() => {});
   }, []);
   const zones = Array.from(new Set(machines.map((m) => m.zone_id).filter(Boolean))) as string[];
-
-  const attachWatcher = async (machine_id: string, signal: string) => {
-    setAttachBusy(true);
-    try { await fetch(`${API_BASE}/stream-agents/connect?machine_id=${machine_id}&signal=${signal}&trigger_level=warning`, { method: 'POST' }); } catch {}
-    setAttachBusy(false);
-  };
-  const detachWatcher = async (machine_id: string, signal: string) => {
-    setAttachBusy(true);
-    try { await fetch(`${API_BASE}/stream-agents/disconnect/${machine_id}/${signal}`, { method: 'POST' }); } catch {}
-    setAttachBusy(false);
-  };
-  const attachAll = async () => {
-    setAttachBusy(true);
-    try { await fetch(`${API_BASE}/stream-agents/auto-connect?trigger_level=warning`, { method: 'POST' }); } catch {}
-    setAttachBusy(false);
-  };
 
   const handleAddDataSource = () => {
     setFormData({
@@ -277,27 +276,40 @@ export default function CustomAgentBuilder() {
       : formData.scope.type === 'zone' ? { type: 'zone', zone: formData.scope.zone }
       : { type: 'all' };
 
+    const body = {
+      name: formData.name,
+      description: formData.description,
+      domain: formData.domain,
+      watch_signals: formData.watchSignals,
+      scope,
+      data_sources: [],
+      rules: formData.rules
+        .filter((r) => r.field && r.action)
+        .map((r) => ({
+          field: r.field,
+          operator: r.operator,
+          value: isNaN(Number(r.value)) ? r.value : Number(r.value),
+          action: r.action,
+          priority: r.priority,
+        })),
+      actions: formData.actions,
+    };
+
     try {
-      await createMutation.mutateAsync({
-        name: formData.name,
-        description: formData.description,
-        domain: formData.domain,
-        watch_signals: formData.watchSignals,
-        scope,
-        data_sources: [],
-        rules: formData.rules
-          .filter((r) => r.field && r.action)
-          .map((r) => ({
-            field: r.field,
-            operator: r.operator,
-            value: isNaN(Number(r.value)) ? r.value : Number(r.value),
-            action: r.action,
-            priority: r.priority,
-          })),
-        actions: formData.actions,
-      });
+      if (editingId) {
+        // Edit in place — keeps the agent's id and history.
+        const r = await fetch(`${API_BASE}/custom-agents/${editingId}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...body, enabled: true }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+      } else {
+        await createMutation.mutateAsync(body);
+      }
 
       refetch();
+      setEditingId(null);
+      setSelectedAgent(null);
       setStep('list');
       setFormData({
         name: '',
@@ -310,16 +322,49 @@ export default function CustomAgentBuilder() {
         actions: [],
       });
     } catch (err) {
-      console.error('Failed to create agent:', err);
-      alert('Failed to create agent');
+      console.error('Failed to save agent:', err);
+      alert(editingId ? 'Failed to update monitor' : 'Failed to create agent');
     }
+  };
+
+  /** An agent names signals, not sources — ask the backend which sources
+   *  actually reach it, so "where does my data come from" is answerable. */
+  const openAgent = (agent: any) => {
+    setSelectedAgent(agent);
+    setAgentSources(null);
+    setStep('detail');
+    fetch(`${API_BASE}/custom-agents/${agent.id}/sources`)
+      .then((r) => r.json()).then(setAgentSources).catch(() => {});
+  };
+
+  /** Load an existing agent back into the builder so it can be tuned. */
+  const startEdit = (agent: any) => {
+    setEditingId(agent.id);
+    setFormData({
+      name: agent.name ?? '',
+      description: agent.description ?? '',
+      domain: agent.domain ?? '',
+      datasources: [{ name: '', type: 'SCADA', config: {}, connStatus: 'idle', connMessage: '' }],
+      watchSignals: agent.watch_signals ?? [],
+      scope: {
+        type: agent.scope?.type ?? 'all',
+        machines: agent.scope?.machines ?? [],
+        zone: agent.scope?.zone ?? '',
+      },
+      rules: (agent.rules?.length ? agent.rules : [{ field: '', operator: '>', value: '', action: '', priority: 1 }])
+        .map((r: any) => ({
+          field: r.field ?? '', operator: r.operator ?? '>',
+          value: String(r.value ?? ''), action: r.action ?? '', priority: r.priority ?? 1,
+        })),
+      actions: agent.actions ?? [],
+    });
+    setStep('create');
   };
 
   if (step === 'list') {
     const attachedList = Object.values(streamAgents);
     const connectedCount = attachedList.filter((a) => a.connected).length;
     const totalRaised = attachedList.reduce((n, a) => n + (a.events_raised || 0), 0);
-    const key = (m: string, s: string) => `${m}::${s}`;
 
     return (
       <div className="max-w-[1180px] space-y-8">
@@ -358,43 +403,52 @@ export default function CustomAgentBuilder() {
           </div>
         </section>
 
-        {/* ── Live signal watchers (attach to signal) ── */}
+        {/* ── Live signal watchers — derived from your data sources, read-only ── */}
         <section>
           <SectionHeader
             eyebrow="Live signal watchers"
-            title="Attach a watcher"
-            accent="to a live signal"
-            sub="Point a watcher at a streaming sensor. It fires an event into the pipeline the moment the signal breaches its threshold."
-            right={
-              <div className="flex items-center gap-2">
-                <SignalPill tone={connectedCount ? 'ok' : 'neutral'}>{connectedCount} watching · {totalRaised} raised</SignalPill>
-                <button onClick={attachAll} disabled={attachBusy} className="btn-ghost px-3 py-1.5 text-[12px] disabled:opacity-50">Attach all</button>
-              </div>
-            }
+            title="Watching"
+            accent="your connected sources"
+            sub="One watcher per field you ticked to watch on a data source. They judge each reading against the machine's own normal — no AI, no rules. A breach is what wakes the monitors below."
+            right={<SignalPill tone={connectedCount ? 'ok' : 'neutral'}>{connectedCount} watching · {totalRaised} raised</SignalPill>}
           />
-          {signals.length === 0 ? (
-            <Card className="p-6 text-center">
-              <p className="text-[13px] text-dim">No live signals — start <span className="font-mono">factory-stream</span> on {STREAM_BASE.replace(/^https?:\/\//, '')} to attach watchers.</p>
+          {attachedList.length === 0 ? (
+            <Card className="p-8 text-center">
+              <p className="text-[14px] font-semibold text-ink">No watchers yet</p>
+              <p className="text-[13px] text-dim mt-1 max-w-md mx-auto">
+                Watchers aren&apos;t created here — they appear when you connect a data source
+                and tick which of its fields to watch.
+              </p>
+              <a href="/data-sources" className="btn-primary inline-flex px-4 py-2 text-[13px] mt-4">
+                Connect a data source
+              </a>
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {signals.map((s) => {
-                const a = streamAgents[key(s.machine_id, s.signal)];
-                const on = a?.connected;
+              {attachedList.map((a) => {
+                const tone = a.last_status === 'critical' ? 'bad'
+                  : a.last_status === 'warning' ? 'warn'
+                  : a.connected ? 'ok' : 'neutral';
                 return (
-                  <Card key={key(s.machine_id, s.signal)} className="p-3.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold text-ink truncate">{s.label}</p>
-                      <p className="font-mono text-[11px] text-dim truncate">{s.machine_id}</p>
-                    </div>
-                    {on ? (
-                      <div className="flex items-center gap-2 shrink-0">
-                        <SignalPill tone="ok">{a.events_raised} raised</SignalPill>
-                        <button onClick={() => detachWatcher(s.machine_id, s.signal)} disabled={attachBusy} className="text-[12px] font-semibold text-dim hover:text-coral disabled:opacity-50">Detach</button>
+                  <Card key={a.key} className="p-3.5">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-ink truncate">{a.label}</p>
+                        <p className="font-mono text-[11px] text-dim truncate">{a.machine_id} · {a.signal}</p>
                       </div>
-                    ) : (
-                      <button onClick={() => attachWatcher(s.machine_id, s.signal)} disabled={attachBusy} className="btn-ghost px-3 py-1.5 text-[12px] shrink-0 disabled:opacity-50">Attach</button>
-                    )}
+                      <SignalPill tone={tone}>{a.connected ? (a.last_status ?? 'live') : 'offline'}</SignalPill>
+                    </div>
+                    <div className="flex items-end justify-between">
+                      <span className="font-mono text-[18px] font-semibold text-ink">
+                        {a.last_value ?? '—'}<span className="text-[12px] text-dim ml-0.5">{a.unit}</span>
+                      </span>
+                      <span className="text-[11px] text-dim">{a.events_raised} raised</span>
+                    </div>
+                    {/* Which yardstick — a fresh plant has no learned normal yet,
+                        and that is worth seeing rather than discovering later. */}
+                    <p className="text-[10px] text-dim mt-2 font-mono truncate">
+                      via {a.source_id} · judged by {a.judged_by}
+                    </p>
                   </Card>
                 );
               })}
@@ -420,7 +474,7 @@ export default function CustomAgentBuilder() {
               {agents.map((agent: any) => {
                 const sourceTypes = (agent.data_sources || []).map((s: any) => s.type?.toUpperCase()).filter(Boolean);
                 return (
-                  <Card key={agent.id} className="p-5 hover:border-moss transition-colors cursor-pointer group" onClick={() => { setSelectedAgent(agent); setStep('detail'); }}>
+                  <Card key={agent.id} className="p-5 hover:border-moss transition-colors cursor-pointer group" onClick={() => openAgent(agent)}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-ok border border-moss shrink-0 font-mono text-[13px] font-bold text-pine-2">
@@ -488,10 +542,15 @@ export default function CustomAgentBuilder() {
             </button>
             <p className="text-sm text-dim">{agent.description}</p>
           </div>
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${agent.enabled ? 'bg-surface-ok text-pine-2 border-moss' : 'bg-paper text-dim border-line'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${agent.enabled ? 'bg-surface-ok0' : 'bg-paper'}`} />
-            {agent.enabled ? 'Active' : 'Disabled'}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => startEdit(agent)} className="btn-ghost px-3.5 py-1.5 text-[13px]">
+              Edit monitor
+            </button>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${agent.enabled ? 'bg-surface-ok text-pine-2 border-moss' : 'bg-paper text-dim border-line'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${agent.enabled ? 'bg-surface-ok0' : 'bg-paper'}`} />
+              {agent.enabled ? 'Active' : 'Disabled'}
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -504,7 +563,7 @@ export default function CustomAgentBuilder() {
             {[
               { label: 'ID', value: agent.id },
               { label: 'Domain', value: agent.domain },
-              { label: 'Data Sources', value: agent.data_sources_count ?? agent.data_sources?.length ?? 0 },
+              { label: 'Scope', value: scopeText(agent.scope) },
               { label: 'Rules', value: agent.rules_count ?? agent.rules?.length ?? 0 },
             ].map(({ label, value }) => (
               <div key={label} className="flex justify-between text-sm border-b border-line pb-2 last:border-0">
@@ -515,24 +574,85 @@ export default function CustomAgentBuilder() {
             </div>
           </div>
 
-          {/* Data Sources */}
+          {/* What it watches — an agent is defined by its signals and scope, not
+              by a data source: any source mapped to these signals feeds it. */}
           <div className="bg-white border border-line rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-3 border-b border-line bg-paper/60">
-              <h2 className="text-sm font-semibold text-ink">Data Sources</h2>
+              <h2 className="text-sm font-semibold text-ink">What it watches</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="font-mono text-[10px] text-dim uppercase tracking-wide mb-2">Signals</p>
+                {agent.watch_signals?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {agent.watch_signals.map((s: string) => (
+                      <span key={s} className="font-mono text-[12px] bg-surface-ok text-pine-2 border border-moss px-2 py-0.5 rounded">{s}</span>
+                    ))}
+                  </div>
+                ) : <p className="text-dim text-sm">No signals selected — this agent will never fire.</p>}
+              </div>
+              <div>
+                <p className="font-mono text-[10px] text-dim uppercase tracking-wide mb-1">Machines</p>
+                <p className="text-[13px] text-ink">{scopeText(agent.scope)}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10px] text-dim uppercase tracking-wide mb-2">Actions it may recommend</p>
+                {agent.actions?.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {agent.actions.map((a: string) => (
+                      <span key={a} className="font-mono text-[12px] bg-paper text-dim border border-line px-2 py-0.5 rounded">{a}</span>
+                    ))}
+                  </div>
+                ) : <p className="text-dim text-sm">Any allowed action (none restricted).</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Fed by — the source→signal link is derived, so show it rather than
+              leaving the operator to guess where the data comes from. */}
+          <div className="bg-white border border-line rounded-xl shadow-sm overflow-hidden md:col-span-2">
+            <div className="px-5 py-3 border-b border-line bg-paper/60 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-ink">Fed by</h2>
+              {agentSources && (
+                <SignalPill tone={agentSources.live_count > 0 ? 'ok' : 'warn'}>
+                  {agentSources.live_count > 0 ? `${agentSources.live_count} live` : 'nothing live'}
+                </SignalPill>
+              )}
             </div>
             <div className="p-5">
-            {agent.data_sources && agent.data_sources.length > 0 ? (
-              <div className="space-y-2">
-                {agent.data_sources.map((ds: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between bg-paper border border-line rounded-lg px-3 py-2 text-sm">
-                    <span className="font-medium text-ink">{ds.name}</span>
-                    <span className="bg-surface-ok text-pine-2 border border-moss px-2 py-0.5 rounded text-xs font-semibold uppercase">{ds.type}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-dim text-sm">No data source details available</p>
-            )}
+              {!agentSources ? (
+                <p className="text-dim text-sm">Loading…</p>
+              ) : agentSources.sources?.length ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line bg-paper/60 text-left text-dim">
+                        {['Source', 'Arrives as', 'Becomes', 'On machines', 'Status'].map((h) => (
+                          <th key={h} className="px-3 pb-2 pt-1 font-semibold text-xs uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agentSources.sources.map((s: any, i: number) => (
+                        <tr key={i} className="border-b border-line last:border-0">
+                          <td className="px-3 py-2 font-mono text-xs text-ink">{s.source_id}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-dim">{s.raw_field}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-pine-2">{s.signal}</td>
+                          <td className="px-3 py-2 text-xs text-dim">{s.machines?.length ? s.machines.join(', ') : '—'}</td>
+                          <td className="px-3 py-2">
+                            <SignalPill tone={s.live ? 'ok' : 'warn'}>{s.live ? 'live' : 'not watched'}</SignalPill>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-dim text-sm">
+                  No connected source maps to {agent.watch_signals?.length ? agent.watch_signals.join(' or ') : 'these signals'} yet —
+                  this monitor will not fire until one does. Connect a source on Data Sources.
+                </p>
+              )}
             </div>
           </div>
 
@@ -584,14 +704,14 @@ export default function CustomAgentBuilder() {
       {/* Header */}
       <div>
         <button
-          onClick={() => setStep('list')}
+          onClick={() => { setStep('list'); setEditingId(null); }}
           className="text-pine-2 hover:text-pine-2 font-semibold mb-3 inline-flex items-center gap-1.5 text-sm"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           Back to Agents
         </button>
         <p className="text-sm text-dim">
-          Connect to manufacturing systems and define intelligent decision rules
+          {editingId ? 'Tune this monitor — signals, scope, thresholds and actions' : 'Connect to manufacturing systems and define intelligent decision rules'}
         </p>
       </div>
 
@@ -922,11 +1042,11 @@ export default function CustomAgentBuilder() {
             disabled={createMutation.isPending}
             className="bg-pine-2 hover:bg-pine disabled:opacity-60 text-white font-semibold py-2.5 px-6 rounded-lg text-sm transition-colors shadow-sm"
           >
-            {createMutation.isPending ? 'Creating...' : 'Create Agent'}
+            {createMutation.isPending ? 'Saving...' : editingId ? 'Save changes' : 'Create Agent'}
           </button>
           <button
             type="button"
-            onClick={() => setStep('list')}
+            onClick={() => { setStep('list'); setEditingId(null); }}
             className="bg-paper hover:bg-line text-ink font-semibold py-2.5 px-6 rounded-lg text-sm transition-colors"
           >
             Cancel

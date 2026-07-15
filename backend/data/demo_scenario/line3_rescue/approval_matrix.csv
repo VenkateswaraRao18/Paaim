@@ -1,0 +1,5 @@
+action_type,owner_role,required_status,escalation_role
+restart_line3,Maintenance Lead,signoff,Plant Manager
+release_batch,QA Lead,signoff,Quality Director
+line2_fallback_plan,Production Manager,approve,Plant Manager
+customer_note,Operations Manager,approve,Plant Manager

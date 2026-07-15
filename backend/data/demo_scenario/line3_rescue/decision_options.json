@@ -1,0 +1,35 @@
+{
+  "options": [
+    {
+      "option_id": "restart_now",
+      "label": "Restart now",
+      "allowed_by_default": false,
+      "owner": "Maintenance Lead",
+      "base_delay_min": 0,
+      "base_qa_escape": 0.31,
+      "blocked_by": [
+        "SOP-MNT-007",
+        "SOP-QA-014"
+      ],
+      "base_ship": 0.62
+    },
+    {
+      "option_id": "inspect_then_restart",
+      "label": "Inspect then restart",
+      "allowed_by_default": true,
+      "owner": "Maintenance Lead",
+      "base_delay_min": 0,
+      "base_qa_escape": 0.08,
+      "base_ship": 0.88
+    },
+    {
+      "option_id": "prepare_line2_fallback",
+      "label": "Prepare Line 2 fallback",
+      "allowed_by_default": true,
+      "owner": "Production Manager",
+      "base_delay_min": 0,
+      "base_qa_escape": 0.07,
+      "base_ship": 0.82
+    }
+  ]
+}

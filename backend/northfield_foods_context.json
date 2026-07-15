@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "Northfield Foods — a US HTST dairy line. This is the document a plant hands",
+    "PAAIM on day one: what it owns, what an hour costs it, and what it owes whom.",
+    "In production this comes from ERP/MES; here it is a file you POST.",
+    "",
+    "Two things worth noticing while you read it:",
+    "  · Deadlines are RELATIVE (due_in_hours), anchored at ingest. Absolute dates",
+    "    in a seed rot: the last one drifted 17 days past due and manufactured 62",
+    "    fabricated L1 incidents out of nothing.",
+    "  · The cost model is deliberately INCOMPLETE — rework and energy are left",
+    "    unpriced, because a real plant never knows all of it on day one. PAAIM",
+    "    should report those as unknown, not quietly invent them."
+  ],
+
+  "factory_id": "factory_001",
+  "replace": true,
+
+  "cost_model": {
+    "downtime_cost_per_hour_usd": 3800,
+    "scrap_cost_per_unit_usd": 2.5,
+    "late_delivery_penalty_per_day_usd": 1500,
+    "labor_cost_per_hour_usd": 55,
+    "planned_maintenance_cost_per_hour_usd": 160,
+    "unplanned_failure_multiplier": 5.0,
+    "overtime_rate_multiplier": 1.5
+  },
+
+  "machines": [
+    { "id": "pasteuriser_01", "name": "Pasteuriser 1 (HTST)", "asset_type": "pasteuriser",
+      "zone_id": "thermal", "criticality": "safety_critical", "oem_model": "APV HX-160",
+      "install_year": 2018, "hourly_production_value_usd": 4200 },
+    { "id": "mixer_01", "name": "Mixer 1", "asset_type": "mixer",
+      "zone_id": "blending", "criticality": "high", "install_year": 2019,
+      "hourly_production_value_usd": 1800 },
+    { "id": "mixer_02", "name": "Mixer 2", "asset_type": "mixer",
+      "zone_id": "blending", "criticality": "medium", "install_year": 2021,
+      "hourly_production_value_usd": 1800 },
+    { "id": "filler_01", "name": "Filler 1", "asset_type": "filler",
+      "zone_id": "filling", "criticality": "high", "oem_model": "Krones Contiform",
+      "install_year": 2020, "hourly_production_value_usd": 3100 },
+    { "id": "filler_02", "name": "Filler 2", "asset_type": "filler",
+      "zone_id": "filling", "criticality": "high", "install_year": 2020,
+      "hourly_production_value_usd": 3100 },
+    { "id": "packer_01", "name": "Packer 1", "asset_type": "packaging_line",
+      "zone_id": "packaging", "criticality": "medium", "install_year": 2017,
+      "hourly_production_value_usd": 2400 },
+    { "id": "chiller_01", "name": "Chiller 1 (Cold Store)", "asset_type": "chiller",
+      "zone_id": "cold_chain", "criticality": "safety_critical", "install_year": 2016,
+      "hourly_production_value_usd": 900 }
+  ],
+
+  "customer_orders": [
+    { "id": "SO-4471", "customer_name": "Greenfield Grocers", "quantity": 48000,
+      "due_in_hours": 30, "status": "open", "priority": "high",
+      "late_delivery_penalty_usd": 18000, "contract_value_usd": 132000 },
+    { "id": "SO-4482", "customer_name": "Metro Dairy Co", "quantity": 24000,
+      "due_in_hours": 96, "status": "open", "priority": "normal",
+      "late_delivery_penalty_usd": 6000, "contract_value_usd": 61000 }
+  ],
+
+  "work_orders": [
+    { "id": "WO-9001", "machine_id": "filler_01", "customer_order_id": "SO-4471",
+      "quantity_planned": 24000, "quantity_completed": 9800,
+      "status": "in_progress", "ends_in_hours": 26, "shift": "A" },
+    { "id": "WO-9002", "machine_id": "filler_02", "customer_order_id": "SO-4471",
+      "quantity_planned": 24000, "quantity_completed": 10400,
+      "status": "in_progress", "ends_in_hours": 26, "shift": "A" },
+    { "id": "WO-9003", "machine_id": "pasteuriser_01", "customer_order_id": "SO-4471",
+      "quantity_planned": 48000, "quantity_completed": 20200,
+      "status": "in_progress", "ends_in_hours": 24, "shift": "A" },
+    { "id": "WO-9004", "machine_id": "packer_01", "customer_order_id": "SO-4482",
+      "quantity_planned": 24000, "quantity_completed": 3100,
+      "status": "in_progress", "ends_in_hours": 88, "shift": "A" },
+    { "id": "WO-9005", "machine_id": "mixer_01", "customer_order_id": "SO-4471",
+      "quantity_planned": 48000, "quantity_completed": 22000,
+      "status": "in_progress", "ends_in_hours": 22, "shift": "A" }
+  ]
+}

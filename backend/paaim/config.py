@@ -39,8 +39,20 @@ class Settings(BaseSettings):
     GEMINI_MAX_TOKENS: int = 1024
     GEMINI_TIMEOUT: int = 30
 
-    # ── Live stream source (factory-stream service) ────────────────────────
-    STREAM_SOURCE_URL: str = "http://localhost:9100"
+    # ── Live watchers ──────────────────────────────────────────────────────
+    # There is deliberately no stream URL here. A source's address belongs to
+    # the source record the operator connected, not to config: a default made
+    # PAAIM answer with a hardcoded plant's signals when nothing was connected
+    # at all, and offered watchers on machines it had never been told about.
+    #
+    # Watchers are in-memory, so a restart drops them. Rebuild on boot from the
+    # confirmed mappings — the operator's own configuration.
+    STREAM_AUTO_CONNECT: bool = True
+    STREAM_TRIGGER_LEVEL: str = "critical"
+    # One physical fault = one incident, across every source that reports it.
+    # Sized in minutes: long enough to cover a stream and a historian seeing the
+    # same breach, short enough that a genuinely new fault is never swallowed.
+    INCIDENT_DEDUPE_WINDOW_S: float = 120.0
 
     # ── Event Bus (reliable ingestion backbone) ────────────────────────────
     # EVENT_BUS = "memory" (durable JSONL log, runs anywhere) | "kafka"

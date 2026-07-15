@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 import time
 from datetime import datetime
@@ -14,6 +15,8 @@ from paaim.agents.custom_framework import get_custom_agent_registry
 from paaim.context.factory_context import FactoryContext
 from paaim.memory.short_term import get_memory_store, MemoryEntry
 from paaim.observability.tracing import trace_pipeline, trace_async
+
+logger = logging.getLogger(__name__)
 
 
 class OrchestrationContext:
@@ -92,7 +95,11 @@ class Orchestrator:
         self.decision_twin = DecisionTwin()
         self.red_team = RedTeamAgent()
         self.registry = get_registry()
-        self.custom_registry = get_custom_agent_registry()
+        # No custom_registry here. The orchestrator is one object serving every
+        # tenant, so binding a monitor registry at construction pinned it to
+        # whichever factory happened to be first — and every other factory's
+        # incidents would then be reasoned about by that plant's monitors.
+        # It is resolved per event instead, from the event's own factory.
         self.publisher = get_publisher()
 
     @trace_pipeline("paaim_orchestrate")
@@ -247,6 +254,8 @@ class Orchestrator:
                 "agent": analysis.agent_name,
                 "confidence": analysis.confidence,
                 "reasoning": analysis.reasoning,
+                # None here means the deterministic rules answered, not the LLM.
+                "model_used": getattr(analysis, "model_used", None),
                 "recommendations": [
                     {
                         "action_name": r.action_name,
@@ -262,28 +271,54 @@ class Orchestrator:
                 ],
             })
 
-        # Custom agents
-        for custom_agent in self.custom_registry.list_agents():
-            if not custom_agent.enabled:
+        # ── User-created agents ─────────────────────────────────────────────
+        # These reason with Gemini exactly like the built-in specialists (see
+        # LLMCustomAgent) — a plant's own agents are not second-class. Only the
+        # agents that actually watch this signal, on a machine in their scope,
+        # are woken: that keeps the reasoning relevant and the LLM spend sane.
+        from paaim.agents.custom_llm import LLMCustomAgent
+
+        machine_zone = None
+        if ctx.factory_context and getattr(ctx.factory_context, "machine", None):
+            machine_zone = (ctx.factory_context.machine or {}).get("zone") \
+                if isinstance(ctx.factory_context.machine, dict) else None
+
+        # This incident's own factory — never a default. A monitor belongs to the
+        # plant that created it, and waking another tenant's monitors would put
+        # one factory's process data into another's reasoning (and bill).
+        custom_registry = get_custom_agent_registry(ctx.event.factory_id)
+        for definition in custom_registry.list_agents():
+            if not definition.enabled:
+                continue
+            if definition.watch_signals and not definition.watches(ctx.event.signal_name):
+                continue
+            if not definition.covers(ctx.event.machine_id or "", machine_zone):
                 continue
             try:
-                event_data = {
-                    "event_type": ctx.event.event_type.value,
-                    "signal_name": ctx.event.signal_name,
-                    "signal_value": ctx.event.signal_value,
-                    "confidence": ctx.event.confidence,
-                }
-                event_data.update(ctx.event.context)
-                recommendations = await self.custom_registry.execute_agent_async(custom_agent.id, event_data)
-                if recommendations:
+                analysis = await LLMCustomAgent(definition).analyze(enriched_event)
+                if analysis.recommendations:
                     ctx.agent_analyses.append({
-                        "agent": custom_agent.name,
-                        "confidence": 0.8,
-                        "reasoning": f"Custom agent {custom_agent.domain} evaluated event",
-                        "recommendations": recommendations,
+                        "agent": definition.name,
+                        "confidence": analysis.confidence,
+                        "reasoning": analysis.reasoning,
+                        "model_used": getattr(analysis, "model_used", None),
+                        "recommendations": [
+                            {
+                                "action_name": r.action_name,
+                                "description": r.description,
+                                "risk_level": r.risk_level.value,
+                                "confidence": r.confidence,
+                                "approval_required": r.approval_required.value,
+                                "assumptions": r.assumptions,
+                                "evidence_signals": r.evidence_signals,
+                                "estimated_impact": r.estimated_impact,
+                            }
+                            for r in analysis.recommendations
+                        ],
                     })
             except Exception as e:
-                ctx.agent_analyses.append({"agent": custom_agent.name, "error": str(e)})
+                logger.warning(f"Custom agent {definition.name} failed: {e}")
+                ctx.agent_analyses.append({"agent": definition.name, "error": str(e)})
 
     def _evaluate_policy(self, ctx: OrchestrationContext) -> None:
         for analysis in ctx.agent_analyses:

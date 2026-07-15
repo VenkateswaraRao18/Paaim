@@ -1,6 +1,8 @@
 """API endpoints for managing custom AI agents."""
 
-from fastapi import APIRouter, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from paaim.agents.custom_framework import (
@@ -13,7 +15,37 @@ from paaim.agents.custom_framework import (
     get_connector_for_source,
 )
 
+from paaim.auth.deps import tenant_id
+
 router = APIRouter()
+
+# Legacy agent-bound source types → the real connector drivers. Anything without
+# a real driver stays under its own name so the connector refuses it by name
+# rather than quietly "succeeding".
+_SOURCE_TYPE_ALIASES = {
+    "rest_api": "rest_poll",
+    "scada": "modbus",      # no driver yet — refused honestly
+    "opc_ua": "opcua",      # no driver yet — refused honestly
+    "iot": "mqtt",          # no driver yet — refused honestly
+    "cms": "rest_poll",     # MES systems are reached over HTTP here
+}
+
+
+def _endpoint_from_config(ds_type, config: Dict[str, Any]) -> str:
+    """Build a URL from the legacy per-type config fields the form collects."""
+    cfg = config or {}
+    if cfg.get("base_url"):
+        base = str(cfg["base_url"]).rstrip("/")
+        return base + str(cfg.get("endpoint", "") or "")
+    host = cfg.get("host") or cfg.get("broker_host") or ""
+    if not host:
+        return ""
+    port = cfg.get("port") or cfg.get("broker_port")
+    hostport = f"{host}:{port}" if port else str(host)
+    if ds_type.value in ("scada", "opc_ua", "iot"):
+        return hostport            # non-HTTP: passed through for the refusal message
+    prefix = str(cfg.get("api_prefix", "") or "")
+    return f"http://{hostport}{prefix}"
 
 
 class DataSourceRequest(BaseModel):
@@ -84,19 +116,29 @@ async def test_connection_before_create(request: DataSourceRequest) -> dict:
         auth_type=request.auth_type,
         auth_config=request.auth_config,
     )
-    connector = get_connector_for_source(data_source)
-    if not connector:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No connector available for type: {request.type}",
-        )
+    # Route through the real connectors. The legacy ones here returned
+    # "SCADA connection OK" without opening a socket — a wrong host looked
+    # healthy and then fed the pipeline zeros. Reuse the drivers that actually
+    # perform a round-trip, and say plainly when a protocol has none.
+    from paaim.sources.connectors import test_connection as real_test
 
-    success, message = await connector.test_connection()
-    return {"success": success, "message": message, "type": request.type}
+    endpoint = _endpoint_from_config(ds_type, request.config)
+    result = await real_test(
+        type=_SOURCE_TYPE_ALIASES.get(ds_type.value, ds_type.value),
+        endpoint=endpoint,
+        auth_type=request.auth_type,
+        auth_config=request.auth_config,
+    )
+    return {
+        "success": result.ok,
+        "message": result.detail,
+        "type": request.type,
+        "latency_ms": result.latency_ms,
+    }
 
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
-async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentResponse:
+async def create_custom_agent(request: CustomAgentRequest, factory: str = Depends(tenant_id)) -> CustomAgentResponse:
     """
     Create a new custom AI agent.
 
@@ -105,7 +147,7 @@ async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentRespons
     - Agent automatically integrates into orchestration pipeline
     """
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
 
         # Validate operators
         for rule in request.rules:
@@ -196,10 +238,10 @@ async def create_custom_agent(request: CustomAgentRequest) -> CustomAgentRespons
 
 
 @router.get("/list")
-async def list_custom_agents() -> dict:
+async def list_custom_agents(factory: str = Depends(tenant_id)) -> dict:
     """List all custom agents."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agents = registry.list_agents()
 
         def _iso(val):
@@ -207,24 +249,15 @@ async def list_custom_agents() -> dict:
                 return None
             return val.isoformat() if hasattr(val, "isoformat") else str(val)
 
+        # Return the whole definition. Hand-rolling a subset here is what left the
+        # UI unable to show an agent's rules ("rules_count: 1" with no rules to
+        # render) — the list and detail shapes drifted apart. `to_dict()` is the
+        # single source of truth; counts stay for cards that only need a number.
         custom_agents = [
             {
-                "id": agent.id,
-                "name": agent.name,
-                "description": agent.description,
-                "domain": agent.domain,
-                "enabled": agent.enabled,
-                "watch_signals": list(agent.watch_signals or []),
-                "scope": agent.scope or {"type": "all"},
+                **agent.to_dict(),
                 "data_sources_count": len(agent.data_sources),
                 "rules_count": len(agent.rules),
-                "actions": list(agent.actions or []),
-                "data_sources": [
-                    {"name": ds.name, "type": getattr(ds.type, "value", ds.type)}
-                    for ds in agent.data_sources
-                ],
-                "created_at": _iso(getattr(agent, "created_at", None)),
-                "updated_at": _iso(getattr(agent, "updated_at", None)),
             }
             for agent in agents
         ]
@@ -241,10 +274,10 @@ async def list_custom_agents() -> dict:
 
 
 @router.get("/{agent_id}")
-async def get_custom_agent(agent_id: str) -> dict:
+async def get_custom_agent(agent_id: str, factory: str = Depends(tenant_id)) -> dict:
     """Get details of a specific custom agent."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:
@@ -253,36 +286,9 @@ async def get_custom_agent(agent_id: str) -> dict:
                 detail=f"Agent '{agent_id}' not found"
             )
 
-        return {
-            "id": agent.id,
-            "name": agent.name,
-            "description": agent.description,
-            "domain": agent.domain,
-            "enabled": agent.enabled,
-            "data_sources": [
-                {
-                    "name": ds.name,
-                    "type": ds.type.value,
-                    "poll_interval_seconds": ds.poll_interval_seconds,
-                    "enabled": ds.enabled,
-                }
-                for ds in agent.data_sources
-            ],
-            "rules": [
-                {
-                    "field": r.field,
-                    "operator": r.operator.value,
-                    "value": r.value,
-                    "action": r.action,
-                    "confidence": r.confidence,
-                    "priority": r.priority,
-                }
-                for r in agent.rules
-            ],
-            "actions": agent.actions,
-            "created_at": agent.created_at.isoformat(),
-            "created_by": agent.created_by,
-        }
+        # Same complete shape the list returns, so the UI can render (and edit)
+        # an agent from either without discovering a field is missing.
+        return agent.to_dict()
     except HTTPException:
         raise
     except Exception as e:
@@ -292,11 +298,98 @@ async def get_custom_agent(agent_id: str) -> dict:
         )
 
 
+@router.get("/{agent_id}/sources")
+async def agent_sources(agent_id: str, factory: str = Depends(tenant_id)) -> dict:
+    """
+    Where this monitor's data comes from.
+
+    Derived, not stored: an agent watches signals, so its sources are whichever
+    ones map a field to those signals. `live` means a watcher is actually
+    deployed for it — an agent can be perfectly configured and still receive
+    nothing because no source has been connected yet.
+    """
+    from paaim.sources.links import sources_feeding_agent
+
+    registry = get_custom_agent_registry(factory)
+    agent = registry.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found"
+        )
+    feeds = sources_feeding_agent(agent, factory)
+    return {
+        "agent_id": agent_id,
+        "watch_signals": list(agent.watch_signals or []),
+        "sources": feeds,
+        "live_count": sum(1 for f in feeds if f["live"]),
+    }
+
+
+@router.put("/{agent_id}")
+async def update_custom_agent(agent_id: str, request: CustomAgentRequest, factory: str = Depends(tenant_id)) -> dict:
+    """
+    Update an agent in place.
+
+    A plant tunes its monitors constantly — a threshold that was right in winter
+    is wrong in summer — so an agent that can only be deleted and recreated
+    (losing its id and history) is not usable. Keeps the id, created_at and
+    creator; replaces what the operator edited.
+    """
+    registry = get_custom_agent_registry(factory)
+    existing = registry.get_agent(agent_id)
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Agent '{agent_id}' not found"
+        )
+
+    try:
+        rules = [
+            Rule(
+                field=r.field, operator=RuleOperator(r.operator), value=r.value,
+                action=r.action, confidence=r.confidence, priority=r.priority,
+            )
+            for r in request.rules
+        ]
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid operator: {e}. Must be one of: "
+                   f"{[o.value for o in RuleOperator]}",
+        )
+
+    data_sources = [
+        DataSource(
+            name=ds.name, type=DataSourceType(ds.type.lower()), config=ds.config,
+            query=ds.query, auth_type=ds.auth_type, auth_config=ds.auth_config,
+            poll_interval_seconds=ds.poll_interval_seconds, enabled=ds.enabled,
+        )
+        for ds in request.data_sources
+    ]
+
+    updated = CustomAgentDefinition(
+        id=existing.id,
+        name=request.name,
+        description=request.description,
+        domain=request.domain,
+        data_sources=data_sources,
+        rules=rules,
+        actions=request.actions,
+        watch_signals=request.watch_signals,
+        scope=request.scope or {"type": "all"},
+        enabled=request.enabled,
+        created_at=existing.created_at,
+        created_by=existing.created_by,
+    )
+    updated.updated_at = datetime.utcnow()
+    registry.register_agent(updated)
+    return updated.to_dict()
+
+
 @router.delete("/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_custom_agent(agent_id: str):
+async def delete_custom_agent(agent_id: str, factory: str = Depends(tenant_id)):
     """Delete a custom agent."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:
@@ -316,10 +409,10 @@ async def delete_custom_agent(agent_id: str):
 
 
 @router.post("/{agent_id}/test-connection")
-async def test_data_source_connection(agent_id: str, source_name: str) -> dict:
+async def test_data_source_connection(agent_id: str, source_name: str, factory: str = Depends(tenant_id)) -> dict:
     """Test connection to a data source for a custom agent."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:
@@ -366,7 +459,7 @@ async def test_data_source_connection(agent_id: str, source_name: str) -> dict:
 
 
 @router.post("/{agent_id}/execute")
-async def execute_custom_agent(agent_id: str, input_data: Optional[Dict[str, Any]] = None) -> dict:
+async def execute_custom_agent(agent_id: str, input_data: Optional[Dict[str, Any]] = None, factory: str = Depends(tenant_id)) -> dict:
     """
     Manually execute a custom agent.
 
@@ -374,7 +467,7 @@ async def execute_custom_agent(agent_id: str, input_data: Optional[Dict[str, Any
     - Otherwise fetches from connected data sources
     """
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:
@@ -401,10 +494,10 @@ async def execute_custom_agent(agent_id: str, input_data: Optional[Dict[str, Any
 
 
 @router.post("/{agent_id}/enable")
-async def enable_custom_agent(agent_id: str) -> dict:
+async def enable_custom_agent(agent_id: str, factory: str = Depends(tenant_id)) -> dict:
     """Enable a custom agent."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         registry.enable_agent(agent_id)
 
         agent = registry.get_agent(agent_id)
@@ -429,10 +522,10 @@ async def enable_custom_agent(agent_id: str) -> dict:
 
 
 @router.get("/{agent_id}/health")
-async def get_agent_health(agent_id: str) -> dict:
+async def get_agent_health(agent_id: str, factory: str = Depends(tenant_id)) -> dict:
     """Get real-time health status of a custom agent and its data sources."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:
@@ -482,7 +575,7 @@ async def stream_agent_data(agent_id: str):
     from fastapi.responses import StreamingResponse
 
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:
@@ -568,7 +661,7 @@ async def stream_agent_data(agent_id: str):
 async def get_recent_recommendations(agent_id: str, limit: int = 50) -> dict:
     """Get recent recommendations generated by the agent."""
     try:
-        registry = get_custom_agent_registry()
+        registry = get_custom_agent_registry(factory)
         agent = registry.get_agent(agent_id)
 
         if not agent:

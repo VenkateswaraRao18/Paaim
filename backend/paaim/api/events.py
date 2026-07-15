@@ -9,7 +9,7 @@ from paaim.governance.audit_logger import AuditStore
 from paaim.streaming import get_publisher
 from paaim.config import settings
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import uuid
 
 
@@ -161,6 +161,8 @@ def persist_decision(db, decision: Dict[str, Any], event: EventData) -> str:
         db.add(entry)
     return event_id
 
+
+from paaim.auth.deps import tenant_id
 
 router = APIRouter()
 simulator = EventSimulator()
@@ -599,7 +601,7 @@ async def approve_decision(
 
 @router.get("/decisions")
 async def list_decisions(
-    factory_id: str = "factory_001",
+    factory_id: str = Depends(tenant_id),
     status: str = None,
     limit: int = 100,
     offset: int = 0,
@@ -611,6 +613,10 @@ async def list_decisions(
         q = q.where(DecisionModel.status == status)
     q = q.order_by(DecisionModel.created_at.desc()).offset(offset).limit(limit)
     rows = (await db.execute(q)).scalars().all()
+
+    # Triage: score each decision into an L1/L2/L3 tier (shared lookups, 2 queries).
+    from paaim.priority.context import build_priority_context, priority_for_decision
+    prio_ctx = await build_priority_context(db, factory_id)
     return {
         "decisions": [
             {
@@ -622,12 +628,72 @@ async def list_decisions(
                 "approved_by": d.approved_by,
                 "approval_timestamp": d.approval_timestamp.isoformat() if d.approval_timestamp else None,
                 "created_at": d.created_at.isoformat(),
+                "priority": priority_for_decision(
+                    recommended_action=d.recommended_action,
+                    outcome=d.outcome,
+                    ctx=prio_ctx,
+                ).to_dict(),
             }
             for d in rows
         ],
         "count": len(rows),
         "factory_id": factory_id,
     }
+
+
+async def _signal_history(
+    db: AsyncSession,
+    factory_id: str,
+    machine_id: Optional[str],
+    signal_name: Optional[str],
+    until: datetime,
+    limit: int = 40,
+    event_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    The real readings of one signal on one machine, up to and including the
+    incident — oldest → newest. Used by the evidence timeline to plot what
+    actually happened before the fault rather than a synthetic curve.
+
+    Live stream incidents only ever persist the breach itself, so the agent
+    ships the window it observed on the event; that is preferred when the
+    events table has no meaningful history of its own.
+    """
+    empty = {"machine_id": machine_id, "signal": signal_name, "points": []}
+
+    # Prefer the agent-captured ramp — it is denser and shows the actual breach.
+    captured = (event_context or {}).get("pre_fault_series") or []
+    captured = [
+        {"t": p["t"], "v": float(p["v"])}
+        for p in captured
+        if isinstance(p, dict) and p.get("v") is not None and p.get("t")
+    ]
+    if len(captured) >= 3:
+        return {"machine_id": machine_id, "signal": signal_name, "points": captured[-limit:]}
+
+    if not machine_id or not signal_name:
+        return empty
+
+    rows = (await db.execute(
+        select(EventModel.created_at, EventModel.signal_value)
+        .where(
+            EventModel.factory_id == factory_id,
+            EventModel.machine_id == machine_id,
+            EventModel.signal_name == signal_name,
+            EventModel.signal_value.isnot(None),
+            EventModel.created_at <= until,
+        )
+        .order_by(EventModel.created_at.desc())
+        .limit(limit)
+    )).all()
+    if not rows:
+        return empty
+
+    points = [
+        {"t": ts.isoformat(), "v": float(v)}
+        for ts, v in reversed(rows)  # oldest → newest; the fault is the last point
+    ]
+    return {"machine_id": machine_id, "signal": signal_name, "points": points}
 
 
 @router.get("/decisions/{decision_id}")
@@ -666,6 +732,56 @@ async def get_decision(decision_id: str, db: AsyncSession = Depends(get_db)):
     }
     manager_options = _build_manager_options(analysis_layers, selected, cost_ctx)
 
+    # Triage tier for this incident (same scorer as the queue).
+    from paaim.priority.context import build_priority_context, priority_for_decision
+    prio_ctx = await build_priority_context(db, decision.factory_id)
+    priority = priority_for_decision(
+        recommended_action=decision.recommended_action,
+        outcome=decision.outcome,
+        ctx=prio_ctx,
+    ).to_dict()
+
+    # Pre-fault series: the real readings of this signal on this machine leading
+    # up to the incident, so the evidence timeline plots history instead of a
+    # single point. Empty when the signal has no prior readings.
+    signal_history = await _signal_history(
+        db,
+        factory_id=decision.factory_id,
+        machine_id=event_block.get("machine_id"),
+        signal_name=event_block.get("signal_name"),
+        until=decision.created_at,
+        event_context=event_block.get("context"),
+    )
+
+    # What this plant told us about itself — the cost model and the order this
+    # machine is running. The detail page reads these to price the incident, and
+    # they were never in the response: `factory_context` simply did not exist as
+    # a key, so the UI fell through to "No cost model configured for this
+    # factory" while the triage block beside it reported $27,500 at risk from
+    # the very same cost model. One screen, two answers, and the wrong one was
+    # the reassuring one.
+    order = prio_ctx["order_by_machine"].get(event_block.get("machine_id"))
+    factory_context = {
+        "costs": {
+            "downtime_cost_per_hour_usd": cc.downtime_cost_per_hour_usd,
+            "scrap_cost_per_unit_usd": cc.scrap_cost_per_unit_usd,
+            "rework_cost_per_unit_usd": cc.rework_cost_per_unit_usd,
+            "late_delivery_penalty_per_day_usd": cc.late_delivery_penalty_per_day_usd,
+            "labor_cost_per_hour_usd": cc.labor_cost_per_hour_usd,
+            "unplanned_failure_multiplier": cc.unplanned_failure_multiplier,
+        } if cc else None,          # None, not {} — "unknown", never "free"
+        "customer_order": {
+            "order_id": order.id,
+            "customer_name": order.customer_name,
+            "promised_delivery": order.promised_delivery.isoformat() if order.promised_delivery else None,
+            "quantity": order.quantity,
+            # Derived: a customer order records what was ordered and what has
+            # shipped, not the difference.
+            "quantity_remaining": max(0, (order.quantity or 0) - (order.quantity_delivered or 0)),
+            "late_delivery_penalty_usd": order.late_delivery_penalty_usd,
+        } if order else None,
+    }
+
     return {
         "decision_id": decision.id,
         "event_id": decision.event_id,
@@ -673,6 +789,9 @@ async def get_decision(decision_id: str, db: AsyncSession = Depends(get_db)):
         "status": decision.status,
         "recommended_action": decision.recommended_action,
         "event": event_block,
+        "priority": priority,
+        "factory_context": factory_context,
+        "signal_history": signal_history,
         "manager_options": manager_options,
         "analysis_layers": analysis_layers,
         "approved_by": decision.approved_by,

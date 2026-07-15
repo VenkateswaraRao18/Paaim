@@ -1,0 +1,116 @@
+{
+  "northfield_scada": {
+    "source_id": "northfield_scada",
+    "machine_id_strategy": "field",
+    "machine_id_value": "machine_id",
+    "fields": {
+      "PSTR1_PROD_TEMP_F": {
+        "raw": "PSTR1_PROD_TEMP_F",
+        "signal": "product_temperature",
+        "unit": "C",
+        "transform": "fahrenheit_to_c",
+        "resolved_by": "heuristic",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "\u00b0F",
+        "unit_status": "converted",
+        "watch": true
+      },
+      "PSTR1_HOLD_PRESS_PSI": {
+        "raw": "PSTR1_HOLD_PRESS_PSI",
+        "signal": "pressure",
+        "unit": "bar",
+        "transform": "psi_to_bar",
+        "resolved_by": "heuristic",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "psi",
+        "unit_status": "converted",
+        "watch": true
+      },
+      "MIXR1_AGIT_VIB": {
+        "raw": "MIXR1_AGIT_VIB",
+        "signal": "vibration",
+        "unit": "mm/s",
+        "transform": "identity",
+        "resolved_by": "heuristic",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "mm/s",
+        "unit_status": "match",
+        "watch": true
+      },
+      "MIXR2_AGIT_VIB": {
+        "raw": "MIXR2_AGIT_VIB",
+        "signal": "vibration",
+        "unit": "mm/s",
+        "transform": "identity",
+        "resolved_by": "heuristic",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "mm/s",
+        "unit_status": "match",
+        "watch": true
+      },
+      "FILR1_NET_WT_G": {
+        "raw": "FILR1_NET_WT_G",
+        "signal": "fill_weight",
+        "unit": "g",
+        "transform": "identity",
+        "resolved_by": "heuristic",
+        "confidence": 0.95,
+        "confirmed_by": null,
+        "source_unit": "g",
+        "unit_status": "match",
+        "watch": true
+      },
+      "FILR2_NET_WT_G": {
+        "raw": "FILR2_NET_WT_G",
+        "signal": "fill_weight",
+        "unit": "g",
+        "transform": "identity",
+        "resolved_by": "heuristic",
+        "confidence": 0.95,
+        "confirmed_by": null,
+        "source_unit": "g",
+        "unit_status": "match",
+        "watch": true
+      },
+      "PACK1_LINE_SPD": {
+        "raw": "PACK1_LINE_SPD",
+        "signal": "line_speed",
+        "unit": "units/min",
+        "transform": "identity",
+        "resolved_by": "heuristic",
+        "confidence": 0.95,
+        "confirmed_by": null,
+        "source_unit": "units/min",
+        "unit_status": "match",
+        "watch": true
+      },
+      "CHIL1_ROOM_TEMP_F": {
+        "raw": "CHIL1_ROOM_TEMP_F",
+        "signal": "temperature",
+        "unit": "C",
+        "transform": "fahrenheit_to_c",
+        "resolved_by": "heuristic",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "\u00b0F",
+        "unit_status": "converted",
+        "watch": true
+      }
+    },
+    "unmapped": [],
+    "version": 2,
+    "confirmed": true,
+    "connection": {
+      "type": "sse_stream",
+      "endpoint": "http://localhost:9100",
+      "auth_type": null,
+      "auth_config": {},
+      "poll_interval_seconds": 30,
+      "verified_at": "2026-07-15T19:07:21.267621"
+    }
+  }
+}

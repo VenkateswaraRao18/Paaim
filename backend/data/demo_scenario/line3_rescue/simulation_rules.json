@@ -1,0 +1,50 @@
+{
+  "rules": [
+    {
+      "rule_id": "loss_so_far",
+      "logic": "current_downtime_min * cost_per_min",
+      "priority": 1
+    },
+    {
+      "rule_id": "repair_time",
+      "logic": "20 if spare_actuator_available else 40 (min)",
+      "priority": 1
+    },
+    {
+      "rule_id": "inspect_recovery",
+      "logic": "inspection_duration + maintenance_arrival + repair_time",
+      "priority": 2
+    },
+    {
+      "rule_id": "ship_inspect",
+      "logic": "clamp(0.88 - 0.0113*max(0, inspection-20) - 0.004*maint_arrival - (0.08 if no spare) - 0.002*max(0,90-buffer), 0.15, 0.92)",
+      "priority": 3
+    },
+    {
+      "rule_id": "ship_line2",
+      "logic": "clamp(0.86 * min(1, capacity/70) - 0.002*max(0,90-buffer), 0.05, 0.9); allowed only if capacity>=30",
+      "priority": 3
+    },
+    {
+      "rule_id": "ship_restart_now",
+      "logic": "0.62 (informational; option is gate-blocked by default)",
+      "priority": 3
+    },
+    {
+      "rule_id": "expected_loss",
+      "logic": "expected_total_downtime * cost_per_min + penalty(if ship_prob<0.7)",
+      "priority": 4
+    },
+    {
+      "rule_id": "qa_escape",
+      "logic": "base_qa_escape scaled up when qa_hold_units high or restart chosen; tolerance widens/tightens threshold",
+      "priority": 4
+    },
+    {
+      "rule_id": "recommendation",
+      "logic": "argmax(ship_probability) over ALLOWED options after safety/quality gates",
+      "priority": 5
+    }
+  ],
+  "fallback_threshold_min": 25
+}

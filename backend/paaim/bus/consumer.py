@@ -66,7 +66,9 @@ async def _custom_agent_recs(session, event: EventData):
         if fk and fk.profile:
             baseline = baseline_for(fk.profile, event.machine_id, event.signal_name)
 
-        return await get_custom_agent_registry().evaluate_signal_event(
+        # Scoped to the event's own factory: only this plant's monitors may see
+        # this plant's readings.
+        return await get_custom_agent_registry(event.factory_id).evaluate_signal_event(
             event.signal_name, event.signal_value, event.machine_id, zone, baseline=baseline,
         )
     except Exception as e:
@@ -79,6 +81,23 @@ async def _handle(record: BusRecord) -> None:
     from paaim.api.events import persist_decision
 
     event = _record_to_event(record.value)
+
+    # One physical fault is one incident, however many feeds saw it. Without
+    # this, a plant running a stream and a historian over the same tag gets two
+    # of everything — two approvals, two triage rows, two LLM chains.
+    from paaim.bus.dedupe import get_deduper
+    source = (event.context or {}).get("source") or event.source_agent or "unknown"
+    is_dup, why = get_deduper().check(
+        event.factory_id, event.machine_id, event.signal_name, source=source,
+        raw_field=(event.context or {}).get("raw_field"),
+    )
+    if is_dup:
+        logger.info("duplicate incident suppressed", extra={
+            "machine_id": event.machine_id, "signal": event.signal_name,
+            "source": source, "reason": why,
+        })
+        return
+
     orchestrator = get_orchestrator()
     bus = get_event_bus()
 

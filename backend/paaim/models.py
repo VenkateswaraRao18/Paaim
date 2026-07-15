@@ -182,12 +182,47 @@ class AuditLogModel(Base):
 
 
 class FactoryModel(Base):
+    """
+    A tenant. Every row in every other table belongs to exactly one of these,
+    and a user may only ever see their own.
+    """
     __tablename__ = "factories"
 
     id = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     location = Column(String)
     config = Column(JSON)
+    # Which starter vocabulary this plant runs on. It lives here rather than in
+    # a module-level dict because a machine shop and a dairy do not share a
+    # vocabulary, and one global one meant whichever tenant logged in last
+    # silently rewrote it for everybody.
+    vocabulary_pack = Column(String, default="cnc_machining")
+    industry = Column(String)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserModel(Base):
+    """
+    A person, bound to one factory.
+
+    Logins used to be `any-address@paaim.local` with the password `password`,
+    resolved in an if/elif in the API — no users existed, and nothing was
+    checked against anything. `factory_id` is what makes a token a tenant claim
+    rather than a formality.
+    """
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    password_hash = Column(String, nullable=False)
+    full_name = Column(String, nullable=False)
+    role = Column(String, nullable=False, default="operator")   # viewer|operator|supervisor|admin
+    # NULL only for a platform admin who legitimately spans tenants. Every other
+    # user must name their factory, or the token cannot scope anything.
+    factory_id = Column(String, ForeignKey("factories.id"), nullable=True, index=True)
+    is_active = Column(Boolean, default=True)
+    last_login_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
@@ -358,17 +393,27 @@ class CostConfigModel(Base):
     """Cost assumptions per factory — used by Decision Twin for real dollar calculations."""
     __tablename__ = "cost_configs"
 
+    # No column defaults on any money figure. These carried $5,000/hr, $50/unit
+    # and friends, and SQLAlchemy applies a column default even when the caller
+    # passes None explicitly — so "don't invent a cost" could not be expressed
+    # through this model at all, and every partially-filled config came out
+    # looking fully configured. A cost PAAIM was never told is NULL, and every
+    # reader downstream now treats NULL as "unknown" rather than as a number.
+    #
+    # `unplanned_failure_multiplier` and `overtime_rate_multiplier` keep theirs:
+    # they are ratios that hold across plants (an unplanned stop costs several
+    # times a planned one), not facts about one factory's economics.
     id = Column(String, primary_key=True)
     factory_id = Column(String, nullable=False, unique=True)
-    downtime_cost_per_hour_usd = Column(Float, default=5_000.0)
-    scrap_cost_per_unit_usd = Column(Float, default=50.0)
-    rework_cost_per_unit_usd = Column(Float, default=20.0)
-    late_delivery_penalty_per_day_usd = Column(Float, default=2_500.0)
-    energy_cost_per_kwh_usd = Column(Float, default=0.12)
-    labor_cost_per_hour_usd = Column(Float, default=75.0)
-    planned_maintenance_cost_per_hour_usd = Column(Float, default=200.0)
-    unplanned_failure_multiplier = Column(Float, default=5.0)  # unplanned costs 5x planned
-    overtime_rate_multiplier = Column(Float, default=1.5)
+    downtime_cost_per_hour_usd = Column(Float, nullable=True)
+    scrap_cost_per_unit_usd = Column(Float, nullable=True)
+    rework_cost_per_unit_usd = Column(Float, nullable=True)
+    late_delivery_penalty_per_day_usd = Column(Float, nullable=True)
+    energy_cost_per_kwh_usd = Column(Float, nullable=True)
+    labor_cost_per_hour_usd = Column(Float, nullable=True)
+    planned_maintenance_cost_per_hour_usd = Column(Float, nullable=True)
+    unplanned_failure_multiplier = Column(Float, default=5.0)  # ratio, not a plant fact
+    overtime_rate_multiplier = Column(Float, default=1.5)      # ratio, not a plant fact
     extra_data = Column(JSON, default=dict)
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

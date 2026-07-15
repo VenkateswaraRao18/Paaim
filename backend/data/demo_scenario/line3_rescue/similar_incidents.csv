@@ -1,0 +1,4 @@
+incident_id,asset,symptoms,action_taken,outcome,recurrence
+WO-3391,Station C3,0x4F3 + high torque + reset failed,Inspected clamp + air-line; reset alone failed,Resolved after clamp inspection,yes
+WO-2984,Station C3,spindle overheat + coolant flow low,Cleaned coolant filter + bled air line,Temp normalised in 20m,yes
+WO-2610,Station C1,camera anomaly + torque spike,Held lot; replaced actuator seal,No escape; lot released after QA,no

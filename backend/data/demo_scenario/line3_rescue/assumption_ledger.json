@@ -1,0 +1,36 @@
+{
+  "assumptions": [
+    {
+      "assumption_id": "cost_per_min",
+      "value": 1300,
+      "unit": "$/min",
+      "source_file": "downtime_cost_model.csv",
+      "editable": true,
+      "confidence": "high"
+    },
+    {
+      "assumption_id": "fallback_threshold_min",
+      "value": 25,
+      "unit": "min",
+      "source_file": "SOP-PLAN-003.md",
+      "editable": false,
+      "confidence": "high"
+    },
+    {
+      "assumption_id": "camera_anomaly",
+      "value": 0.91,
+      "unit": "score",
+      "source_file": "vision_events.csv",
+      "editable": false,
+      "confidence": "high"
+    },
+    {
+      "assumption_id": "current_downtime",
+      "value": 14,
+      "unit": "min",
+      "source_file": "incident_event.json",
+      "editable": false,
+      "confidence": "high"
+    }
+  ]
+}

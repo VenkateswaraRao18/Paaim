@@ -108,12 +108,17 @@ class QualityHistoryContext:
 
 @dataclass
 class CostContext:
-    downtime_cost_per_hour_usd: float
-    scrap_cost_per_unit_usd: float
-    rework_cost_per_unit_usd: float
-    late_delivery_penalty_per_day_usd: float
-    labor_cost_per_hour_usd: float
-    unplanned_failure_multiplier: float
+    """
+    What this factory told us its economics are. Any field may be None: a plant
+    that configured downtime cost but never priced scrap has one, not both, and
+    the difference must survive all the way into the agents' prompt.
+    """
+    downtime_cost_per_hour_usd: Optional[float]
+    scrap_cost_per_unit_usd: Optional[float]
+    rework_cost_per_unit_usd: Optional[float]
+    late_delivery_penalty_per_day_usd: Optional[float]
+    labor_cost_per_hour_usd: Optional[float]
+    unplanned_failure_multiplier: float          # a ratio, always known
 
 
 @dataclass
@@ -194,11 +199,30 @@ class FactoryContext:
 
         if self.costs:
             c = self.costs
+            # Per-field, because a partially configured plant is the normal case
+            # and each missing figure must read as missing. Formatting a None
+            # here would also crash the whole context build.
+            def _usd(v, suffix: str) -> str:
+                return f"${v:,.0f}{suffix}" if v is not None else "not configured"
+
             lines.append(f"\nCOST ASSUMPTIONS (this factory):")
-            lines.append(f"  Downtime: ${c.downtime_cost_per_hour_usd:,.0f}/hr")
-            lines.append(f"  Scrap: ${c.scrap_cost_per_unit_usd:,.0f}/unit | Rework: ${c.rework_cost_per_unit_usd:,.0f}/unit")
-            lines.append(f"  Late delivery: ${c.late_delivery_penalty_per_day_usd:,.0f}/day")
+            lines.append(f"  Downtime: {_usd(c.downtime_cost_per_hour_usd, '/hr')}")
+            lines.append(f"  Scrap: {_usd(c.scrap_cost_per_unit_usd, '/unit')} | "
+                         f"Rework: {_usd(c.rework_cost_per_unit_usd, '/unit')}")
+            lines.append(f"  Late delivery: {_usd(c.late_delivery_penalty_per_day_usd, '/day')}")
             lines.append(f"  Unplanned failure multiplier: {c.unplanned_failure_multiplier}x planned maintenance cost")
+            if any(v is None for v in (c.downtime_cost_per_hour_usd, c.scrap_cost_per_unit_usd,
+                                       c.late_delivery_penalty_per_day_usd)):
+                lines.append("  Do not estimate the figures marked 'not configured' — say they are unknown.")
+        else:
+            # Stated, not omitted. Left silent, the model fills the gap with a
+            # plausible-sounding figure of its own and the recommendation ends up
+            # resting on a number nobody supplied.
+            lines.append("\nCOST ASSUMPTIONS (this factory):")
+            lines.append("  NOT CONFIGURED — this factory has no cost model.")
+            lines.append("  Do not estimate or assume any financial figures. Reason from")
+            lines.append("  safety, physical evidence and delivery impact only, and say")
+            lines.append("  plainly that cost impact is unknown.")
 
         lines.append("\n=== END FACTORY CONTEXT ===")
         return "\n".join(lines)
@@ -478,15 +502,13 @@ class FactoryContextService:
         q = select(CostConfigModel).where(CostConfigModel.factory_id == factory_id).limit(1)
         row = (await db.execute(q)).scalar_one_or_none()
         if not row:
-            # Return sensible defaults if no config found
-            return CostContext(
-                downtime_cost_per_hour_usd=5_000,
-                scrap_cost_per_unit_usd=50,
-                rework_cost_per_unit_usd=20,
-                late_delivery_penalty_per_day_usd=2_500,
-                labor_cost_per_hour_usd=75,
-                unplanned_failure_multiplier=5.0,
-            )
+            # No cost model → None. These used to be six invented numbers under
+            # the heading "sensible defaults", and they went into the agents'
+            # prompt as "COST ASSUMPTIONS (this factory)". A plant that had told
+            # PAAIM nothing about its economics had Gemini reasoning about its
+            # $5,000/hour downtime and recommending line stops on the strength
+            # of it. A default is only sensible where being wrong is cheap.
+            return None
         return CostContext(
             downtime_cost_per_hour_usd=row.downtime_cost_per_hour_usd,
             scrap_cost_per_unit_usd=row.scrap_cost_per_unit_usd,

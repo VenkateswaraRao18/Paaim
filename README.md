@@ -1,9 +1,23 @@
 # PAAIM: Policy-Aware Agentic Intelligence Manager
 
-**Production Manufacturing Intelligence System**  
-**Version:** 0.1.0 | **Status:** 🚀 Production-Ready | **Build:** Phase 1 + Phase 2.5 Complete
+Multi-tenant manufacturing decision system: live plant signals → normalize → multi-agent orchestration → governed incidents with audit trails.
 
-A policy-aware, bounded-autonomy manufacturing decision orchestration layer that coordinates AI agents across safety, quality, maintenance, production, and energy domains with complete audit trails and human-in-loop governance.
+## Run it (laptop)
+
+**One dependency: [Docker Desktop](https://www.docker.com/products/docker-desktop/).** See **[QUICKSTART.md](./QUICKSTART.md)** for the full walkthrough.
+
+```bash
+cp .env.example .env          # optional: add GEMINI_API_KEY for LLM reasoning
+docker compose up --build     # first run ~3–4 min
+# open http://localhost:3000
+```
+
+| Plant | Email | Password |
+|-------|--------|----------|
+| Northfield Foods | `ops@northfield.example` | `northfield123` |
+| Precision Parts | `ops@precision.example` | `precision123` |
+
+Without a Gemini key the product still runs (deterministic agent fallbacks).
 
 ---
 

@@ -1,10 +1,11 @@
 import './globals.css'
 import { Providers } from '@/components/Providers'
+import AuthProvider from '@/components/AuthProvider'
 import MainLayout from '@/components/MainLayout'
 
 export const metadata = {
-  title: 'PAAIM Dashboard',
-  description: 'Policy-Aware Agentic Intelligence Manager Dashboard',
+  title: 'PAAIM — Policy-Aware Agentic Intelligence Manager',
+  description: 'Decide what matters on the factory floor, and prove why.',
 }
 
 export default function RootLayout({
@@ -16,7 +17,11 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
-          <MainLayout>{children}</MainLayout>
+          {/* Outside MainLayout: it gates the app and attaches the tenant token
+              to every API call, so it must wrap the chrome as well as the page. */}
+          <AuthProvider>
+            <MainLayout>{children}</MainLayout>
+          </AuthProvider>
         </Providers>
       </body>
     </html>

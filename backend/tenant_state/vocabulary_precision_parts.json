@@ -1,0 +1,139 @@
+{
+  "pack_id": "cnc_machining",
+  "signals": {
+    "torque": {
+      "unit": "Nm",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "trq",
+        "torque",
+        "mtr_torque",
+        "spindle_torque",
+        "motor_torque"
+      ],
+      "description": "Spindle/motor torque"
+    },
+    "process_temperature": {
+      "unit": "K",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "proc_temp",
+        "process_temp",
+        "process_t",
+        "process_temperature"
+      ],
+      "description": "Temperature at the work zone"
+    },
+    "air_temperature": {
+      "unit": "K",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "air_temp",
+        "ambient_temp",
+        "air_temperature",
+        "ambient"
+      ],
+      "description": "Ambient air temperature"
+    },
+    "temperature": {
+      "unit": "C",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "temp",
+        "temperature",
+        "temp_c",
+        "tempc"
+      ],
+      "description": "General temperature"
+    },
+    "rotational_speed": {
+      "unit": "rpm",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "rpm",
+        "speed",
+        "rot_speed",
+        "spindle_speed",
+        "rotational_speed"
+      ],
+      "description": "Spindle speed"
+    },
+    "tool_wear": {
+      "unit": "min",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "wear",
+        "tool_life",
+        "tool_wear",
+        "toolwear"
+      ],
+      "description": "Cutting-tool usage since last change"
+    },
+    "vibration": {
+      "unit": "mm/s",
+      "event_type": "maintenance",
+      "higher_is_worse": true,
+      "synonyms": [
+        "vib",
+        "vibration",
+        "vibration_rms",
+        "vibr"
+      ],
+      "description": "Vibration RMS \u2014 bearing/imbalance"
+    },
+    "pressure": {
+      "unit": "bar",
+      "event_type": "maintenance",
+      "higher_is_worse": false,
+      "synonyms": [
+        "press",
+        "pressure",
+        "hyd_pressure",
+        "hydraulic_pressure"
+      ],
+      "description": "Hydraulic pressure \u2014 low is the fault"
+    },
+    "coolant_pressure": {
+      "unit": "bar",
+      "event_type": "maintenance",
+      "higher_is_worse": false,
+      "synonyms": [
+        "coolant_press",
+        "coolant_pressure",
+        "coolant"
+      ],
+      "description": "Coolant delivery pressure"
+    },
+    "power": {
+      "unit": "kW",
+      "event_type": "energy",
+      "higher_is_worse": true,
+      "synonyms": [
+        "kw",
+        "power",
+        "power_draw",
+        "load_kw",
+        "power_kw"
+      ],
+      "description": "Instantaneous power draw"
+    },
+    "energy": {
+      "unit": "kWh",
+      "event_type": "energy",
+      "higher_is_worse": true,
+      "synonyms": [
+        "kwh",
+        "energy",
+        "consumption",
+        "energy_kwh"
+      ],
+      "description": "Energy consumed"
+    }
+  }
+}

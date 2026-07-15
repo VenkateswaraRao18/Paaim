@@ -56,12 +56,24 @@ class SignalGenerator:
         warn: float,
         critical: float,
         *,
+        tag: Optional[str] = None,
+        unit: Optional[str] = None,
         higher_is_worse: bool = True,
         daily_amplitude: float = 0.0,
         drift: float = 0.0,
     ):
         self.machine_id = machine_id
         self.label = label
+        # Per-instrument, not per-class. Two plants measure the same physical
+        # quantity in different units (°C here, °F there), and the unit is what
+        # PAAIM's mapping needs in order to convert rather than assume. Falls
+        # back to the subclass's unit when a catalogue does not state one.
+        self.unit = unit or self.unit
+        # What this instrument is called on THIS plant's PLC (e.g. "TT_101").
+        # Real sites never share a naming scheme, so the feed publishes the raw
+        # tag and lets PAAIM's mapping layer translate it to the canonical
+        # vocabulary. `kind` stays the physics; `tag` is the plant's word for it.
+        self.tag = tag or self.kind
         self.baseline = baseline
         self.noise = noise
         self.warn = warn
@@ -74,6 +86,7 @@ class SignalGenerator:
         self._drift_accum = 0.0
         self._anomaly_ticks = 0
         self._anomaly_target: Optional[float] = None
+        self._last_value: Optional[float] = None  # anchors the anomaly ramp
 
     # ── anomaly control ─────────────────────────────────────────────────────
     def inject_anomaly(self, duration: int = 12, magnitude: float = 1.0) -> None:
@@ -119,16 +132,24 @@ class SignalGenerator:
 
         value = self.baseline + cycle + self._drift_accum + noise
 
-        # if an anomaly is active, ramp toward the danger target then decay
+        # If an anomaly is active, ramp from where the signal actually is toward
+        # the danger target so it converges past `critical` (blending against the
+        # freshly-computed baseline never converges — it parks in the warning band).
         if self._anomaly_ticks > 0 and self._anomaly_target is not None:
-            value = value * 0.4 + self._anomaly_target * 0.6 + random.gauss(0, self.noise)
+            start = self._last_value if self._last_value is not None else value
+            value = start + (self._anomaly_target - start) * 0.5 + random.gauss(0, self.noise * 0.3)
             self._anomaly_ticks -= 1
             if self._anomaly_ticks == 0:
                 self._anomaly_target = None
+        elif self._last_value is not None:
+            # ease back to normal after an anomaly instead of snapping
+            value = self._last_value + (value - self._last_value) * 0.4
+
+        self._last_value = value
 
         return Reading(
             machine_id=self.machine_id,
-            signal=self.kind,
+            signal=self.tag,
             label=self.label,
             value=value,
             unit=self.unit,

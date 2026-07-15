@@ -1,0 +1,31 @@
+{
+  "custom_agent_967e1f18": {
+    "id": "custom_agent_967e1f18",
+    "name": "Pasteuriser & Fill Quality",
+    "description": "Wakes on product temperature or fill weight, anywhere on the line.",
+    "domain": "quality",
+    "data_sources": [],
+    "rules": [
+      {
+        "field": "fill_weight",
+        "operator": ">",
+        "value": "508",
+        "action": "hold_batch",
+        "confidence": 0.9,
+        "priority": 1
+      }
+    ],
+    "actions": [],
+    "watch_signals": [
+      "product_temperature",
+      "fill_weight"
+    ],
+    "scope": {
+      "type": "all"
+    },
+    "enabled": true,
+    "created_at": "2026-07-15T18:55:03.933236",
+    "updated_at": "2026-07-15T18:55:03.933237",
+    "created_by": "api_user"
+  }
+}

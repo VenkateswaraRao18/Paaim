@@ -10,6 +10,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from paaim.auth.deps import tenant_id
 from paaim.knowledge_model.factory_schema import get_factory
 from paaim.knowledge_model.kpis import KPI_CATALOGUE, get_demo_kpi_snapshot, evaluate_kpis
 from paaim.knowledge_model.learning import compute_profile
@@ -26,18 +27,50 @@ router = APIRouter()
 
 # ── Historical learning ────────────────────────────────────────────────────────
 
-@router.post("/history/upload/{factory_id}")
-async def upload_history(factory_id: str, file: UploadFile = File(...),
+@router.post("/history/upload")
+async def upload_history(file: UploadFile = File(...),
+                         source_id: Optional[str] = None,
+                         factory_id: str = Depends(tenant_id),
                          db: AsyncSession = Depends(get_db)):
     """
-    Upload a factory's historical data (CSV). The system learns from it:
-    per-machine baselines (normal ranges), failure frequency, MTBF and
-    recurring issues — stored as the factory's knowledge profile.
+    Upload a factory's historical data (CSV) and learn its normal from it.
+
+    `source_id` names the connected source this export came from, and it is what
+    makes the learning usable. A historian exports the plant's own tags in the
+    plant's own units; the watchers look baselines up by canonical signal in
+    canonical units. Without translating through that source's confirmed
+    mapping, the upload reports "learned" and produces a profile nothing can
+    ever match — or worse, one whose numbers are in the wrong unit entirely.
+
+    Omit `source_id` only if the CSV is already in canonical signals and units.
     """
     raw = (await file.read()).decode("utf-8", errors="ignore")
     rows = list(csv.DictReader(io.StringIO(raw)))
     if not rows:
         raise HTTPException(status_code=400, detail="CSV is empty or unparseable.")
+
+    unmapped: list = []
+    if source_id:
+        from paaim.normalization.mapping import get_mapping_store
+        from paaim.knowledge_model.learning import normalize_history
+
+        mapping = get_mapping_store(factory_id).get(source_id)
+        if not mapping or not mapping.confirmed:
+            raise HTTPException(
+                status_code=404,
+                detail=(f"No confirmed mapping for source '{source_id}'. Connect and map the "
+                        f"source first — until PAAIM knows what its tags mean, it cannot learn "
+                        f"anything from its history that the watchers will be able to use."),
+            )
+        norm = normalize_history(rows, mapping)
+        unmapped = norm["unmapped_tags"]
+        if not norm["rows"]:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"None of this CSV's tags are mapped under '{source_id}'. "
+                        f"Unrecognised: {', '.join(u['tag'] for u in unmapped[:8])}"),
+            )
+        rows = norm["rows"]
 
     profile = compute_profile(rows)
 
@@ -58,18 +91,38 @@ async def upload_history(factory_id: str, file: UploadFile = File(...),
         ))
     await db.commit()
 
+    # Report the canonical signals actually learned. "machines_learned: 7" is
+    # not the useful number — a watcher matches on (machine, signal), so the
+    # only thing that tells you whether this upload will be used is the list of
+    # signals it produced under the names the watchers will ask for.
+    learned_signals = sorted({
+        sig for m in profile["machines"].values() for sig in (m.get("signals") or {})
+    })
     return {
         "status": "learned",
         "factory_id": factory_id,
         "filename": file.filename,
+        "normalized_through": source_id,
         "records_analyzed": profile["records_analyzed"],
         "machines_learned": profile["machines_learned"],
         "total_failures": profile["total_failures"],
+        "signals_learned": learned_signals,
+        "unmapped_tags": unmapped,
+        "warning": (
+            f"{len(unmapped)} tag(s) in this CSV are not mapped under '{source_id}' and were "
+            f"skipped: {', '.join(u['tag'] for u in unmapped[:5])}"
+        ) if unmapped else None,
+        "note": (
+            "Signals are canonical and converted into your vocabulary's units — watchers will "
+            "judge against these." if source_id else
+            "Uploaded without a source_id: signal names and units are taken as-is. If this CSV "
+            "holds raw plant tags, the watchers will not find these baselines."
+        ),
     }
 
 
-@router.get("/history/profile/{factory_id}")
-async def get_knowledge_profile(factory_id: str, db: AsyncSession = Depends(get_db)):
+@router.get("/history/profile")
+async def get_knowledge_profile(factory_id: str = Depends(tenant_id), db: AsyncSession = Depends(get_db)):
     """Return the learned factory knowledge profile (or empty if none yet)."""
     row = (await db.execute(
         select(FactoryKnowledgeModel).where(FactoryKnowledgeModel.factory_id == factory_id).limit(1)

@@ -1,0 +1,88 @@
+{
+  "gates": [
+    {
+      "gate_id": "safety_loto",
+      "label": "Safety / LOTO",
+      "status": "hold",
+      "reason": "Inspection required before restart when interlock + torque + temperature risk are active.",
+      "owner": "Maintenance Lead",
+      "source": "SOP-MNT-007.md",
+      "blocked_actions": [
+        "restart_line3",
+        "clear_interlock"
+      ],
+      "allowed_drafts": [
+        "draft_work_order",
+        "escalate_maintenance"
+      ]
+    },
+    {
+      "gate_id": "quality_release",
+      "label": "Quality release",
+      "status": "hold",
+      "reason": "Last 47 units require containment due to high camera anomaly.",
+      "owner": "QA Lead",
+      "source": "SOP-QA-014.md",
+      "blocked_actions": [
+        "release_batch",
+        "restart_line3"
+      ],
+      "allowed_drafts": [
+        "qa_hold_notice",
+        "inspection_checklist"
+      ]
+    },
+    {
+      "gate_id": "ot_cyber",
+      "label": "OT cyber boundary",
+      "status": "pass",
+      "reason": "Read-only OT mode; no PLC write-back; no parameter change.",
+      "owner": "OT Engineer",
+      "source": "IEC-62443",
+      "blocked_actions": [
+        "change_plc_parameter"
+      ],
+      "allowed_drafts": []
+    },
+    {
+      "gate_id": "production_approval",
+      "label": "Production approval",
+      "status": "review",
+      "reason": "Line 2 fallback may affect schedule.",
+      "owner": "Production Manager",
+      "source": "approval_matrix.csv",
+      "blocked_actions": [],
+      "allowed_drafts": [
+        "line2_fallback_plan"
+      ]
+    },
+    {
+      "gate_id": "customer_impact",
+      "label": "Customer impact",
+      "status": "review",
+      "reason": "Apex Motors PO-4817 at risk.",
+      "owner": "Operations Manager",
+      "source": "orders.csv",
+      "blocked_actions": [],
+      "allowed_drafts": [
+        "management_brief",
+        "customer_note"
+      ]
+    },
+    {
+      "gate_id": "action_approval",
+      "label": "Action approval",
+      "status": "review",
+      "reason": "Human review required before any external action.",
+      "owner": "Plant Manager",
+      "source": "approval_matrix.csv",
+      "blocked_actions": [],
+      "allowed_drafts": []
+    }
+  ],
+  "restart_blocking_gates": [
+    "safety_loto",
+    "quality_release"
+  ],
+  "trust_banner": "Read-only OT mode. No PLC write-back. No autonomous restart. Human approval required."
+}

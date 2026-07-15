@@ -55,6 +55,53 @@ def _parse_ts(row: Dict[str, str]) -> Optional[datetime]:
         return None
 
 
+def normalize_history(rows: List[Dict[str, str]], mapping) -> Dict[str, Any]:
+    """
+    Translate a plant's raw history export into the canonical vocabulary before
+    anything is learned from it.
+
+    A history CSV is an export from the plant's historian: its own tag names, in
+    its own units. The profile built from it is looked up by the watchers using
+    `baseline_for(profile, machine_id, canonical_signal)` — so learning straight
+    from the raw rows was broken twice over, and both failures were silent:
+
+      · **Name.** History learned `PSTR1_PROD_TEMP_F`; the watcher asked for
+        `product_temperature` and got None. The upload reported "learned", and
+        every watcher went on judging by declared limits forever.
+      · **Unit.** Had the names lined up, the baseline would have been a mean of
+        165 (°F) against live readings of 73.9 (°C) — every reading ~100σ from
+        normal, i.e. critical, permanently.
+
+    So the same mapping the live feed uses is applied here. Rows whose tag the
+    plant never mapped are dropped and reported rather than learned under a name
+    nothing will ever ask for.
+    """
+    from paaim.normalization.schema import TRANSFORMS
+
+    out: List[Dict[str, str]] = []
+    unmapped: Counter = Counter()
+    for r in rows:
+        r = {_norm_key(k): v for k, v in r.items()}
+        tag = r.get("signal_name") or r.get("signal")
+        fm = (mapping.fields or {}).get(tag) if tag else None
+        if not fm:
+            if tag:
+                unmapped[tag] += 1
+            continue
+        val = _f(r, "signal_value", "value")
+        if val is None:
+            continue
+        r["signal_name"] = fm.signal
+        r["signal_value"] = TRANSFORMS.get(fm.transform, TRANSFORMS["identity"])(val)
+        out.append(r)
+
+    return {
+        "rows": out,
+        "unmapped_tags": [{"tag": t, "rows": n} for t, n in unmapped.most_common()],
+        "mapped_rows": len(out),
+    }
+
+
 def compute_profile(rows: List[Dict[str, str]]) -> Dict[str, Any]:
     """Compute the learned factory knowledge profile from historical rows."""
     rows = [{_norm_key(k): v for k, v in r.items()} for r in rows]

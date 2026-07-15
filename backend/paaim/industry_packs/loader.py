@@ -85,16 +85,20 @@ async def apply_pack(factory_id: str, pack_id: str, db) -> Dict[str, Any]:
         existing.updated_at = datetime.utcnow()
         db.add(existing)
     else:
+        # Only what the pack actually states. The old fallbacks ($5,000/hr,
+        # $50/unit …) meant a pack that omitted a cost still produced a
+        # confident number indistinguishable from a configured one. A pack is a
+        # starting point the plant confirms, not a source of facts about it.
         db.add(CostConfigModel(
             id=f"cc_{uuid.uuid4().hex[:8]}",
             factory_id=factory_id,
-            downtime_cost_per_hour_usd=costs.get("downtime_cost_per_hour_usd", 5000),
-            scrap_cost_per_unit_usd=costs.get("scrap_cost_per_unit_usd", 50),
-            rework_cost_per_unit_usd=costs.get("rework_cost_per_unit_usd", 20),
-            late_delivery_penalty_per_day_usd=costs.get("late_delivery_penalty_per_day_usd", 2500),
-            labor_cost_per_hour_usd=costs.get("labor_cost_per_hour_usd", 75),
+            downtime_cost_per_hour_usd=costs.get("downtime_cost_per_hour_usd"),
+            scrap_cost_per_unit_usd=costs.get("scrap_cost_per_unit_usd"),
+            rework_cost_per_unit_usd=costs.get("rework_cost_per_unit_usd"),
+            late_delivery_penalty_per_day_usd=costs.get("late_delivery_penalty_per_day_usd"),
+            labor_cost_per_hour_usd=costs.get("labor_cost_per_hour_usd"),
             unplanned_failure_multiplier=costs.get("unplanned_failure_multiplier", 5.0),
-            extra_data={"applied_pack": pack_id},
+            extra_data={"applied_pack": pack_id, "source": "industry pack — typical figures, confirm against your own"},
         ))
 
     logger.info(f"Applied industry pack '{pack_id}' to factory '{factory_id}'")

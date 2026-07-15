@@ -1,0 +1,104 @@
+{
+  "precision_scada": {
+    "source_id": "precision_scada",
+    "machine_id_strategy": "field",
+    "machine_id_value": "machine_id",
+    "fields": {
+      "PT_HYD_01": {
+        "raw": "PT_HYD_01",
+        "signal": "pressure",
+        "unit": "bar",
+        "transform": "identity",
+        "resolved_by": "heuristic",
+        "confidence": 0.95,
+        "confirmed_by": null,
+        "source_unit": "bar",
+        "unit_status": "match",
+        "watch": true
+      },
+      "TT_101": {
+        "raw": "TT_101",
+        "signal": "temperature",
+        "unit": "C",
+        "transform": "identity",
+        "resolved_by": "llm",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "\u00b0C",
+        "unit_status": "match",
+        "watch": true
+      },
+      "VE_102": {
+        "raw": "VE_102",
+        "signal": "vibration",
+        "unit": "mm/s",
+        "transform": "identity",
+        "resolved_by": "llm",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "mm/s",
+        "unit_status": "match",
+        "watch": true
+      },
+      "VE_201": {
+        "raw": "VE_201",
+        "signal": "vibration",
+        "unit": "mm/s",
+        "transform": "identity",
+        "resolved_by": "llm",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "mm/s",
+        "unit_status": "match",
+        "watch": true
+      },
+      "TT_205": {
+        "raw": "TT_205",
+        "signal": "temperature",
+        "unit": "C",
+        "transform": "identity",
+        "resolved_by": "llm",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "\u00b0C",
+        "unit_status": "match",
+        "watch": true
+      },
+      "VE_301": {
+        "raw": "VE_301",
+        "signal": "vibration",
+        "unit": "mm/s",
+        "transform": "identity",
+        "resolved_by": "llm",
+        "confidence": 1.0,
+        "confirmed_by": null,
+        "source_unit": "mm/s",
+        "unit_status": "match",
+        "watch": true
+      },
+      "JT_TOT_04": {
+        "raw": "JT_TOT_04",
+        "signal": "energy",
+        "unit": "kWh",
+        "transform": "identity",
+        "resolved_by": "llm",
+        "confidence": 0.95,
+        "confirmed_by": null,
+        "source_unit": "kW",
+        "unit_status": "conflict",
+        "watch": true
+      }
+    },
+    "unmapped": [],
+    "version": 2,
+    "confirmed": true,
+    "connection": {
+      "type": "sse_stream",
+      "endpoint": "http://localhost:9101",
+      "auth_type": null,
+      "auth_config": {},
+      "poll_interval_seconds": 30,
+      "verified_at": "2026-07-15T19:07:21.570033"
+    }
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "factors": [
+    {
+      "factor_id": "inspection_duration_min",
+      "label": "Inspection duration",
+      "type": "slider",
+      "default": 20,
+      "min": 10,
+      "max": 45,
+      "step": 5,
+      "unit": "min",
+      "source": "SOP-MNT-007.md",
+      "business_reason": "Determines whether Line 2 fallback should be prepared now."
+    },
+    {
+      "factor_id": "maintenance_arrival_min",
+      "label": "Maintenance tech arrival",
+      "type": "select",
+      "default": 0,
+      "options": [
+        0,
+        15,
+        30,
+        45
+      ],
+      "unit": "min",
+      "source": "shift_roster",
+      "business_reason": "Shows workforce availability constraint."
+    },
+    {
+      "factor_id": "line2_capacity_pct",
+      "label": "Line 2 capacity",
+      "type": "slider",
+      "default": 70,
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "source": "line_capacity.csv",
+      "business_reason": "Determines whether reroute is feasible."
+    },
+    {
+      "factor_id": "qa_hold_units",
+      "label": "QA hold quantity",
+      "type": "slider",
+      "default": 47,
+      "min": 20,
+      "max": 100,
+      "step": 1,
+      "unit": "units",
+      "source": "SOP-QA-014.md",
+      "business_reason": "Changes inspection burden and release timing."
+    },
+    {
+      "factor_id": "cost_per_min",
+      "label": "Downtime cost/min",
+      "type": "slider",
+      "default": 1300,
+      "min": 500,
+      "max": 2500,
+      "step": 100,
+      "unit": "$",
+      "source": "downtime_cost_model.csv",
+      "business_reason": "Lets a plant map ROI to its own economics."
+    },
+    {
+      "factor_id": "deadline_buffer_min",
+      "label": "Customer deadline buffer",
+      "type": "slider",
+      "default": 90,
+      "min": 0,
+      "max": 120,
+      "step": 10,
+      "unit": "min",
+      "source": "orders.csv",
+      "business_reason": "Controls shipment risk urgency."
+    },
+    {
+      "factor_id": "spare_actuator_available",
+      "label": "Spare actuator available",
+      "type": "toggle",
+      "default": true,
+      "options": [
+        true,
+        false
+      ],
+      "unit": "",
+      "source": "cmms_inventory",
+      "business_reason": "Changes expected repair and fallback path."
+    },
+    {
+      "factor_id": "qa_risk_tolerance",
+      "label": "QA escape risk tolerance",
+      "type": "select",
+      "default": "low",
+      "options": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "unit": "",
+      "source": "SOP-QA-014.md",
+      "business_reason": "Quality-first plants may reject a fast restart."
+    }
+  ],
+  "fallback_threshold_min": 25,
+  "current_downtime_min": 14,
+  "order": {
+    "id": "PO-4817",
+    "customer": "Apex Motors"
+  }
+}

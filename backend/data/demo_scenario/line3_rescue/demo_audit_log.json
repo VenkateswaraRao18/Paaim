@@ -1,0 +1,1404 @@
+{
+  "events": [
+    {
+      "timestamp": "2026-07-13T19:23:26.477712",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:23:29.121924",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 35
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 30
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:24.759576",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:26.249786",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:33.126182",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:35.005036",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:39.310739",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 15
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:40.184938",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 30
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:40.787440",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:41.717254",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 30
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:42.336998",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:43.658075",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 10
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:44.129847",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:50.252590",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        },
+        {
+          "factor": "qa_risk_tolerance",
+          "old": "low",
+          "new": "medium"
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:50.991494",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        },
+        {
+          "factor": "qa_risk_tolerance",
+          "old": "low",
+          "new": "high"
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:51.443402",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:51.934863",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        },
+        {
+          "factor": "qa_risk_tolerance",
+          "old": "low",
+          "new": "medium"
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:26:52.352018",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 60
+        },
+        {
+          "factor": "qa_risk_tolerance",
+          "old": "low",
+          "new": "high"
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:27:04.022036",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 30
+        },
+        {
+          "factor": "maintenance_arrival_min",
+          "old": 0,
+          "new": 45
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 80
+        },
+        {
+          "factor": "deadline_buffer_min",
+          "old": 90,
+          "new": 40
+        },
+        {
+          "factor": "qa_risk_tolerance",
+          "old": "low",
+          "new": "high"
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:27:09.259782",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:27:14.396312",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 20
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:30:40.955627",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:41:49.186462",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:42:30.252736",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:42:46.391002",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:47:56.457629",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:47:57.785333",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-13T19:59:40.452612",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:06:48.845850",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:10:09.085529",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:41:02.965448",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:43:52.123194",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:43:58.948025",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:46:12.572524",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:46:28.674980",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:53:05.208616",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:53:07.992217",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T14:57:35.317878",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T15:03:28.342417",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:21:48.838115",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:21:50.577528",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:22:36.503262",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:16.553151",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:47.031577",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 25
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:47.313173",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:47.639834",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:49.072537",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 100
+        }
+      ],
+      "recommended_option": "prepare_line2_fallback",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:49.501436",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 50
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:51.024762",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 50
+        },
+        {
+          "factor": "qa_hold_units",
+          "old": 47,
+          "new": 69
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:52.250659",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 50
+        },
+        {
+          "factor": "qa_hold_units",
+          "old": 47,
+          "new": 69
+        },
+        {
+          "factor": "cost_per_min",
+          "old": 1300,
+          "new": 1800
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:54.348250",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 50
+        },
+        {
+          "factor": "qa_hold_units",
+          "old": 47,
+          "new": 69
+        },
+        {
+          "factor": "cost_per_min",
+          "old": 1300,
+          "new": 1700
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:35:55.014749",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 50
+        },
+        {
+          "factor": "qa_hold_units",
+          "old": 47,
+          "new": 69
+        },
+        {
+          "factor": "cost_per_min",
+          "old": 1300,
+          "new": 2500
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-14T23:36:00.106273",
+      "scenario_id": "line3_rescue_whatif",
+      "changed_factors": [
+        {
+          "factor": "inspection_duration_min",
+          "old": 20,
+          "new": 40
+        },
+        {
+          "factor": "line2_capacity_pct",
+          "old": 70,
+          "new": 50
+        },
+        {
+          "factor": "qa_hold_units",
+          "old": 47,
+          "new": 69
+        }
+      ],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T02:27:41.301137",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T02:27:42.541812",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T03:16:54.038311",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T03:41:55.827630",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T03:56:31.250004",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T03:57:01.786807",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T03:59:26.700004",
+      "scenario_id": "line3_rescue_default",
+      "changed_factors": [],
+      "recommended_option": "inspect_then_restart",
+      "blocked_actions": [
+        "change_plc_parameter",
+        "clear_interlock",
+        "release_batch",
+        "restart_line3"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T04:09:45.139727",
+      "scenario_id": "incident:dec_20260715_031550_623dfe1d",
+      "changed_factors": [],
+      "recommended_option": "propose_recovery_plan",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T04:12:04.273344",
+      "scenario_id": "incident:dec_20260715_041016_62ed5d1a",
+      "changed_factors": [],
+      "recommended_option": "stop_line",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T04:42:50.147139",
+      "scenario_id": "incident:dec_20260715_041016_62ed5d1a",
+      "changed_factors": [],
+      "recommended_option": "stop_line",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T04:42:54.155294",
+      "scenario_id": "incident:dec_20260715_041016_62ed5d1a",
+      "changed_factors": [],
+      "recommended_option": "stop_line",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T13:19:42.492330",
+      "scenario_id": "incident:dec_20260715_131836_9adecae3",
+      "changed_factors": [],
+      "recommended_option": "reduce_consumption",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T13:24:53.856736",
+      "scenario_id": "incident:dec_20260715_131836_9adecae3",
+      "changed_factors": [],
+      "recommended_option": "reduce_consumption",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T16:32:02.240652",
+      "scenario_id": "incident:dec_20260715_163032_19aa1a08",
+      "changed_factors": [],
+      "recommended_option": "stop_line",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T16:32:48.502554",
+      "scenario_id": "incident:dec_20260715_163032_19aa1a08",
+      "changed_factors": [],
+      "recommended_option": "stop_line",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T16:32:51.307224",
+      "scenario_id": "incident:dec_20260715_163032_19aa1a08",
+      "changed_factors": [],
+      "recommended_option": "stop_line",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T16:38:45.825278",
+      "scenario_id": "incident:dec_20260715_163630_e815bf34",
+      "changed_factors": [],
+      "recommended_option": "escalate_critical",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T16:40:51.989474",
+      "scenario_id": "incident:dec_20260715_163630_e815bf34",
+      "changed_factors": [],
+      "recommended_option": "escalate_critical",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T18:54:03.531753",
+      "scenario_id": "incident:dec_20260715_185248_ac4385c1",
+      "changed_factors": [],
+      "recommended_option": "schedule_maintenance",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T19:10:36.720924",
+      "scenario_id": "incident:dec_20260715_190845_2aa50a17",
+      "changed_factors": [],
+      "recommended_option": "inspect_root_cause",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T19:12:45.060062",
+      "scenario_id": "incident:dec_20260715_190845_2aa50a17",
+      "changed_factors": [],
+      "recommended_option": "inspect_root_cause",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    },
+    {
+      "timestamp": "2026-07-15T19:20:07.212143",
+      "scenario_id": "incident:dec_20260715_190845_2aa50a17",
+      "changed_factors": [],
+      "recommended_option": "inspect_root_cause",
+      "blocked_actions": [
+        "continue_production",
+        "restart",
+        "restart_now",
+        "resume_production"
+      ],
+      "generated_drafts": [],
+      "user": "operator"
+    }
+  ]
+}

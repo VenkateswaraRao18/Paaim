@@ -1,0 +1,3 @@
+line_id,capacity_percent,setup_time_min,products_supported,current_load
+Line 2,70,25,"treadmill_deck,frame_weld",45
+Line 4,40,35,frame_weld,60

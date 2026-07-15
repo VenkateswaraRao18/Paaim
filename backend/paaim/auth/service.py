@@ -6,14 +6,30 @@ import logging
 from functools import lru_cache
 from enum import Enum
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
-# Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt directly, not through passlib. passlib 1.7 probes `bcrypt.__about__`
+# to read the version, which bcrypt 4+ removed — so every hash raised
+# "password cannot be longer than 72 bytes" from inside a backend it had failed
+# to load. Authentication that cannot hash a password is not a small bug, and
+# the indirection bought nothing: this is one algorithm with one call.
+_BCRYPT_MAX_BYTES = 72
+
+
+def _prepare(password: str) -> bytes:
+    """
+    Encode a password for bcrypt, truncated to the algorithm's real limit.
+
+    bcrypt ignores everything past 72 bytes. Truncating explicitly (rather than
+    letting the library raise) keeps a long passphrase working, and keeps the
+    cut at a byte boundary — slicing the str instead would count characters and
+    still overflow on any non-ASCII password.
+    """
+    return password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
 
 
 class UserRole(str, Enum):
@@ -109,12 +125,20 @@ class AuthService:
         self.config = config
 
     def hash_password(self, password: str) -> str:
-        """Hash password."""
-        return pwd_context.hash(password)
+        """Hash a password for storage."""
+        return bcrypt.hashpw(_prepare(password), bcrypt.gensalt()).decode("utf-8")
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify password."""
-        return pwd_context.verify(plain_password, hashed_password)
+        """
+        Check a password against its stored hash.
+
+        Returns False on a malformed hash rather than raising: a corrupt row
+        must fail this one login, not 500 the whole endpoint.
+        """
+        try:
+            return bcrypt.checkpw(_prepare(plain_password), hashed_password.encode("utf-8"))
+        except (ValueError, TypeError):
+            return False
 
     def create_access_token(
         self,

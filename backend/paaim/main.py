@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 import logging
@@ -79,6 +80,63 @@ app.add_middleware(RequestTracingMiddleware)
 
 
 # ── Startup / shutdown ────────────────────────────────────────────────────────
+async def _auto_connect_stream(retries: int = 12, delay: float = 5.0) -> None:
+    """Redeploy each connected source's watchers after a restart.
+
+    Watchers are in-memory subscriptions, so a restart silently drops them and
+    injected faults stop producing incidents. Rebuild them from the confirmed
+    mappings — the operator's own configuration — rather than blanket-connecting
+    every signal the feed happens to expose. Retries so the backend may boot
+    before the feed; never fatal, the app is fine without it.
+
+    Every tenant, not just one: the stores are per factory now, so nothing would
+    know which factories exist until someone happened to log in — and a plant
+    whose operators are all asleep would sit unwatched until morning.
+    """
+    from paaim.normalization.mapping import load_all_tenants
+    from paaim.stream_bridge.bridge import get_stream_bridge
+
+    for attempt in range(1, retries + 1):
+        try:
+            tenants = load_all_tenants()
+            if not tenants:
+                logger.info("No factories configured yet — no watchers to deploy")
+                return
+
+            total, deployed_for = 0, []
+            for factory_id, store in tenants.items():
+                sources = [m for m in store.list() if m.confirmed]
+                if not sources:
+                    continue
+                for m in sources:
+                    res = await get_stream_bridge().sync_from_mapping(
+                        factory_id, m.source_id, settings.STREAM_TRIGGER_LEVEL
+                    )
+                    total += len(res.get("connected", []))
+                deployed_for.append(factory_id)
+
+                # Polled sources need a poller rebuilt too — same in-memory problem.
+                try:
+                    from paaim.sources.poller import get_poller_registry
+                    res = await get_poller_registry().sync(factory_id)
+                    if res.get("running"):
+                        logger.info(f"[{factory_id}] pollers running for: {res['running']}")
+                except Exception as e:
+                    logger.warning(f"[{factory_id}] poller sync failed: {e}")
+
+            if deployed_for:
+                logger.info(f"Watchers deployed: {total} signals across "
+                            f"{len(deployed_for)} factor(ies): {deployed_for}")
+            else:
+                logger.info("No connected data sources yet — no watchers to deploy")
+            return
+        except Exception as e:
+            if attempt == retries:
+                logger.warning(f"Watcher deploy gave up after {retries} attempts: {e}")
+                return
+            await asyncio.sleep(delay)
+
+
 @app.on_event("startup")
 async def startup_event():
     try:
@@ -136,6 +194,10 @@ async def startup_event():
             await start_orchestration_consumer()
             logger.info("Event bus consumer started", extra={"backend": settings.EVENT_BUS})
 
+        # Reconnect the live-signal watchers (in-memory, so lost on every restart).
+        if settings.STREAM_AUTO_CONNECT:
+            asyncio.create_task(_auto_connect_stream())
+
         logger.info(
             "PAAIM started successfully",
             extra={"environment": settings.ENVIRONMENT, "database_url": settings.DATABASE_URL},
@@ -156,6 +218,8 @@ async def shutdown_event():
             await stop_orchestration_consumer()
         from paaim.stream_bridge.bridge import get_stream_bridge
         await get_stream_bridge().disconnect_all()
+        from paaim.sources.poller import get_poller_registry
+        await get_poller_registry().stop_all()
         logger.info("PAAIM shutdown completed")
     except Exception as e:
         logger.error("Shutdown error", extra={"error": str(e)}, exc_info=True)
@@ -211,7 +275,7 @@ async def metrics():
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-from paaim.api import events, agents, auth, custom_agents, analytics, knowledge, stream_agents, semantic, chat, normalization, evaluation
+from paaim.api import events, factory_setup, agents, auth, custom_agents, analytics, knowledge, stream_agents, semantic, chat, normalization, evaluation, twin, sources
 from fastapi import APIRouter as _AR
 from paaim.observability.tracing import get_tracing_status
 from paaim.model_router.router import get_router as _get_router
@@ -237,5 +301,8 @@ app.include_router(stream_agents.router, prefix="/api/stream-agents", tags=["str
 app.include_router(semantic.router, prefix="/api/semantic", tags=["semantic"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(normalization.router, prefix="/api/normalization", tags=["normalization"])
+app.include_router(sources.router, prefix="/api/sources", tags=["sources"])
 app.include_router(evaluation.router, prefix="/api/eval", tags=["eval"])
+app.include_router(twin.router, prefix="/api/twin", tags=["twin"])
+app.include_router(factory_setup.router, prefix="/api/factory-setup", tags=["factory-setup"])
 app.include_router(_obs_router, prefix="/api/observability", tags=["observability"])

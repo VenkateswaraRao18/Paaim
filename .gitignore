@@ -78,5 +78,10 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
-# ── Internal drafts not needed to run the product ────────────────────────────
+# ── Internal drafts / office docs (keep local; not needed to run the product) ─
 progress_report/
+*.docx
+*.pdf
+*.doc
+*.pptx
+*.xlsx

@@ -182,7 +182,7 @@ class Orchestrator:
             # Layer 5 — Red-Team challenge
             await self._emit(PipelineEventType.RED_TEAM_CHALLENGING, ctx.decision_id, "red_team", {"status": "challenging"})
             t0 = time.perf_counter()
-            self._challenge_recommendations(ctx)
+            await self._challenge_recommendations(ctx)
             ctx.layer_latencies["red_team"] = round((time.perf_counter() - t0) * 1000, 1)
             await self._emit(PipelineEventType.RED_TEAM_COMPLETE, ctx.decision_id, "red_team",
                              {"reviews": len(ctx.red_team_reviews),
@@ -366,7 +366,7 @@ class Orchestrator:
                     "summary": self.decision_twin.get_impact_summary(impact),
                 }
 
-    def _challenge_recommendations(self, ctx: OrchestrationContext) -> None:
+    async def _challenge_recommendations(self, ctx: OrchestrationContext) -> None:
         for analysis in ctx.agent_analyses:
             if "error" in analysis:
                 continue

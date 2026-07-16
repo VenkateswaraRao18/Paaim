@@ -5,7 +5,6 @@ import { plainMachine, plainSignal } from '@/lib/labels';
 import { Eyebrow, SectionHeader, Card, KpiTile, SignalPill, AlertBar } from '@/components/ui';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-const FACTORY = 'factory_001';
 
 type SignalBaseline = {
   mean: number; std: number; min: number; max: number; p95: number;
@@ -28,9 +27,13 @@ export default function FactoryMemoryPage() {
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // The factory is derived from the signed-in token, so these endpoints take no
+  // factory in the path any more. This page used to hardcode `factory_001` and
+  // call `/history/profile/{factory}` — a tenant that no longer exists, on a
+  // route that now 404s.
   const load = async () => {
     try {
-      const r = await fetch(`${API_BASE}/knowledge/history/profile/${FACTORY}`);
+      const r = await fetch(`${API_BASE}/knowledge/history/profile`);
       const d = await r.json();
       if (d.learned) {
         setProfile(d.profile);
@@ -43,9 +46,21 @@ export default function FactoryMemoryPage() {
   const upload = async (file: File) => {
     setUploading(true); setError(null);
     try {
+      // The history CSV holds the plant's raw tags in the plant's own units, so
+      // the learner must translate it through a connected source's mapping. Pick
+      // the tenant's first confirmed source automatically — the operator should
+      // not have to know a source_id to upload their own history.
+      const mr = await fetch(`${API_BASE}/normalization/mappings`);
+      const mj = await mr.json();
+      const src = (mj.mappings || []).find((m: any) => m.confirmed) || (mj.mappings || [])[0];
+      if (!src) throw new Error('Connect a data source first — history is learned through its mapping.');
+
       const fd = new FormData();
       fd.append('file', file);
-      const r = await fetch(`${API_BASE}/knowledge/history/upload/${FACTORY}`, { method: 'POST', body: fd });
+      const r = await fetch(
+        `${API_BASE}/knowledge/history/upload?source_id=${encodeURIComponent(src.source_id)}`,
+        { method: 'POST', body: fd },
+      );
       if (!r.ok) throw new Error((await r.json()).detail || 'Upload failed');
       await load();
     } catch (e: any) {

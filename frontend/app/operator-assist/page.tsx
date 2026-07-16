@@ -188,7 +188,7 @@ export default function OperatorAssistPage() {
                     <span className="font-mono text-[11px] font-semibold text-ink uppercase tracking-wide">{c.date}</span>
                     <span className="font-mono text-[10.5px] text-dim uppercase tracking-wide">{c.downtime_min} min · {c.technician}</span>
                   </div>
-                  <p className="text-[12.5px] text-dim italic font-mono mb-1.5 leading-snug">"{c.raw_note}"</p>
+                  <p className="text-[12.5px] text-dim italic font-mono mb-1.5 leading-snug">&ldquo;{c.raw_note}&rdquo;</p>
                   <p className="text-[13px] text-pine-2 font-medium leading-snug">→ {c.resolution}</p>
                 </div>
               ))}

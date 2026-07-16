@@ -278,7 +278,7 @@ export default function ControlTowerPage() {
         <div>
           <Eyebrow>Business state · seeded context</Eyebrow>
           <h1 className="text-[22px] font-bold text-ink tracking-[-0.02em] mt-1">Control Tower</h1>
-          <p className="text-[13px] text-dim mt-0.5">Orders, quality, machines and KPIs — the factory's business state and what's at risk.</p>
+          <p className="text-[13px] text-dim mt-0.5">Orders, quality, machines and KPIs — the factory&apos;s business state and what&apos;s at risk.</p>
         </div>
         {factory.data && (
           <div className="text-right">

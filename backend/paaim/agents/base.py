@@ -241,7 +241,15 @@ Rules:
 
         prompt = self._build_prompt(event_data, domain_context)
         try:
-            response = client.generate_content(prompt)
+            # Off the event loop. `generate_content` is a synchronous, ~45s
+            # network call; awaited directly inside this async handler it froze
+            # the entire API — every other request, including /health and the
+            # frontend's polling, blocked until the LLM returned. On a live box
+            # with watchers raising incidents, that read as "the app shows
+            # nothing." asyncio.to_thread runs it on a worker so the loop stays
+            # responsive while an agent reasons.
+            import asyncio
+            response = await asyncio.to_thread(client.generate_content, prompt)
             text = response.text.strip()
             # Strip markdown code fences if present
             if text.startswith("```"):

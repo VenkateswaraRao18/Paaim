@@ -247,7 +247,7 @@ async def replay_stream(from_offset: int = 0):
 
 @router.get("/list")
 async def list_events(
-    factory_id: str,
+    factory_id: str = Depends(tenant_id),
     limit: int = 100,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
@@ -451,7 +451,7 @@ async def ingest_dataset(
 
 @router.get("/audit/search")
 async def search_audit_logs(
-    factory_id: str,
+    factory_id: str = Depends(tenant_id),
     event_type: str = None,
     start_date: str = None,
     end_date: str = None,
@@ -485,7 +485,7 @@ async def get_decision_timeline(decision_id: str, db: AsyncSession = Depends(get
 
 @router.get("/audit/report/{factory_id}")
 async def get_compliance_report(
-    factory_id: str,
+    factory_id: str = Depends(tenant_id),
     start_date: str = None,
     end_date: str = None,
     db: AsyncSession = Depends(get_db),

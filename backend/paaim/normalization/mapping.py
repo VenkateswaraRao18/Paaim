@@ -142,7 +142,15 @@ class MappingStore:
     plant's vocabulary.
     """
 
-    def __init__(self, factory_id: str, dir_: str = "tenant_state"):
+    def __init__(self, factory_id: str, dir_: Optional[str] = None):
+        # Honour the tenant-state dir the container mounts as a volume, the same
+        # one the vocabulary and monitor stores already use. Defaulting to the
+        # relative "tenant_state" put mappings inside the container's working
+        # directory — ephemeral — so every image rebuild silently wiped every
+        # source mapping, and the watchers built from them, while vocab and
+        # monitors (which read this env var) survived. That mismatch is why one
+        # tenant kept losing its watchers across restarts and another did not.
+        dir_ = dir_ or os.getenv("PAAIM_TENANT_STATE_DIR", "tenant_state")
         self.factory_id = factory_id
         os.makedirs(dir_, exist_ok=True)
         self.path = os.path.join(dir_, f"mappings_{_safe_id(factory_id)}.json")
@@ -198,7 +206,8 @@ def all_mapping_stores() -> Dict[str, MappingStore]:
     return _stores
 
 
-def load_all_tenants(dir_: str = "tenant_state") -> Dict[str, MappingStore]:
+def load_all_tenants(dir_: Optional[str] = None) -> Dict[str, MappingStore]:
+    dir_ = dir_ or os.getenv("PAAIM_TENANT_STATE_DIR", "tenant_state")
     """
     Discover every factory with saved mappings and load its store.
 

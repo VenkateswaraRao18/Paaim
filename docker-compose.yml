@@ -1,16 +1,21 @@
-# PAAIM — the whole product on one laptop.
+# PAAIM — the whole product, one command.
 #
-#     cp .env.example .env        # optional: add a Gemini key
-#     docker compose up --build   # first run ~3-4 min, then seconds
-#     open http://localhost:3000
+#   Laptop:   docker compose up --build            → http://localhost:3000
+#   AWS/EC2:  PAAIM_HOST=<public-ip> docker compose up --build
+#                                                   → http://<public-ip>:3000
 #
-# This replaced a compose file that stood up Postgres and Redis, mounted the
-# source over the image, ran uvicorn with --reload, and had no frontend, no
-# plant to connect to, and no Dockerfile to build. It could not have started.
+# PAAIM_HOST is the single knob. It defaults to localhost, so the laptop path is
+# unchanged; on a server it is the address the BROWSER will use to reach the box.
+# It must be set at build time, because the frontend inlines the API URL when it
+# compiles (NEXT_PUBLIC_*). Getting this wrong is the one thing that breaks a
+# cloud deploy: with the default, every API call from a remote browser resolves
+# to the viewer's OWN machine, not the server.
 #
-# Everything a cloud deployment would have to externalise — SQLite, the tenant
+# Everything a larger deployment would have to externalise — SQLite, the tenant
 # state files, the in-memory event bus, the single-process watchers — is exactly
-# right on one machine. No Postgres, no Redis, no broker. One volume.
+# right on one box. No Postgres, no Redis, no broker. One volume. It runs as a
+# single instance by design; that is fine for a demo and for one plant, and is
+# the thing to revisit before scaling out (see DEPLOY_AWS.md).
 
 services:
   # ── The two simulated plants ────────────────────────────────────────────
@@ -38,7 +43,9 @@ services:
       # say so on screen — the product runs, the reasoning just isn't Gemini's.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       SECRET_KEY: ${SECRET_KEY:-dev-only-not-a-production-secret}
-      CORS_ORIGINS: http://localhost:3000
+      # Must match the address the browser loads the web app from, or the
+      # browser blocks every response as cross-origin.
+      CORS_ORIGINS: http://${PAAIM_HOST:-localhost}:3000
       # Container names, not localhost: inside this network `localhost:9100`
       # would mean the API container itself. The seeder connects the sources
       # using these, so nobody has to know that.
@@ -60,10 +67,11 @@ services:
     build:
       context: ./frontend
       args:
-        # The browser runs on the host, so it talks to the published port —
-        # not to `api:8000`, which only exists inside this network. NEXT_PUBLIC_*
-        # is inlined at build time, which is why it is a build arg.
-        NEXT_PUBLIC_API_URL: http://localhost:8000/api
+        # The address the BROWSER uses to reach the API — the server's public
+        # host, not `api:8000` (that name only exists inside this network) and
+        # not localhost (that would be the viewer's own machine). Inlined at
+        # build time, so changing PAAIM_HOST needs a rebuild, not just a restart.
+        NEXT_PUBLIC_API_URL: http://${PAAIM_HOST:-localhost}:8000/api
     ports: ["3000:3000"]
     depends_on: [api]
 

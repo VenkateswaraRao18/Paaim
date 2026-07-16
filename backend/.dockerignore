@@ -1,0 +1,25 @@
+# Never ship the local dev environment into the image.
+# venv is a macOS Python 3.9 build — its binaries do not run on the Linux
+# container, and it is 437MB of pure waste in the build context.
+venv
+.venv
+__pycache__
+*.pyc
+
+# The professor must get a clean, freshly-seeded database — not ours.
+# The container makes its own at /data/paaim.db.
+*.db
+*.db-journal
+*.backup_*.db
+tenant_state
+data_bus
+signal_vocabulary.json
+source_mappings.json
+custom_agents.json
+
+# Backups this session wrote
+.wipe_backup_*
+
+.env
+.git
+.DS_Store

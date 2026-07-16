@@ -372,7 +372,13 @@ class Orchestrator:
                 continue
             for rec in analysis["recommendations"]:
                 action_name = rec["action_name"]
-                review = self.red_team.challenge(
+                # Off the event loop: red_team.challenge makes a synchronous
+                # ~15s Gemini call, and awaited inline it froze the API for that
+                # whole window on every incident — the last remaining blocker
+                # after the agents were threaded.
+                import asyncio
+                review = await asyncio.to_thread(
+                    self.red_team.challenge,
                     action_name=action_name,
                     confidence=rec["confidence"],
                     evidence_signals=rec["evidence_signals"],
